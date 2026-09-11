@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#121212"
+    android:orientation="vertical">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="WiFi Hardware Pro"
+        android:textColor="#FFFFFF"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:padding="16dp" />
+
+    <!-- Панель вкладок -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        android:layout_marginBottom="8dp">
+
+        <Button
+            android:id="@+id/tabHardware"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="ТТХ ЧИПА"
+            android:backgroundTint="#4CAF50"
+            android:textColor="#000000"
+            android:textStyle="bold"
+            android:layout_marginEnd="4dp"/>
+
+        <Button
+            android:id="@+id/tabScanner"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="ЭФИР"
+            android:backgroundTint="#333333"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold"
+            android:layout_marginStart="4dp"/>
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <!-- ВКЛАДКА 1: ТТХ Чипа (старая логика) -->
+        <ScrollView
+            android:id="@+id/layoutHardware"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:padding="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <Button
+                    android:id="@+id/btnAnalyze"
+                    android:layout_width="match_parent"
+                    android:layout_height="60dp"
+                    android:text="Просканировать систему"
+                    android:textColor="#000000"
+                    android:backgroundTint="#4CAF50"
+                    android:layout_marginBottom="16dp" />
+
+                <!-- Блок аппаратных возможностей -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="#1E1E1E"
+                    android:padding="16dp"
+                    android:layout_marginBottom="16dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="АППАРАТНЫЕ ВОЗМОЖНОСТИ ЧИПА" android:textColor="#888888" android:textSize="12sp" android:textStyle="bold" android:layout_marginBottom="10dp" />
+                    <TextView android:id="@+id/tvBand5G" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#E0E0E0" android:layout_marginBottom="6dp" />
+                    <TextView android:id="@+id/tvBand6G" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#E0E0E0" />
+                </LinearLayout>
+
+                <!-- Блок стандартов -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="#1E1E1E"
+                    android:padding="16dp"
+                    android:layout_marginBottom="16dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="ПОДДЕРЖКА СТАНДАРТОВ" android:textColor="#888888" android:textSize="12sp" android:textStyle="bold" android:layout_marginBottom="10dp" />
+                    <TextView android:id="@+id/tvWifi4" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="6dp" />
+                    <TextView android:id="@+id/tvWifi5" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="6dp" />
+                    <TextView android:id="@+id/tvWifi6" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="6dp" />
+                    <TextView android:id="@+id/tvWifi7" android:layout_width="match_parent" android:layout_height="wrap_content" />
+                </LinearLayout>
+            </LinearLayout>
+        </ScrollView>
+
+        <!-- ВКЛАДКА 2: Сканер эфира (Изначально скрыта) -->
+        <ScrollView
+            android:id="@+id/layoutScanner"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone"
+            android:padding="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <Button
+                    android:id="@+id/btnScanEther"
+                    android:layout_width="match_parent"
+                    android:layout_height="60dp"
+                    android:text="Обновить список сетей"
+                    android:textColor="#000000"
+                    android:backgroundTint="#03A9F4"
+                    android:layout_marginBottom="16dp" />
+
+                <!-- Сюда будем динамически добавлять найденные сети -->
+                <LinearLayout
+                    android:id="@+id/containerNetworks"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"/>
+
+            </LinearLayout>
+        </ScrollView>
+    </FrameLayout>
+</LinearLayout>
