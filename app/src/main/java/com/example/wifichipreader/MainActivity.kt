@@ -3,6 +3,7 @@ package com.example.wifichipreader
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.location.LocationManager
 import android.os.Build
@@ -48,7 +49,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvConnectionDetails: TextView
 
     private var currentTabIndex = 0
-    private var lastPingMs = -1L // Храним последний пинг, чтобы не вешать UI ежесекундно
+    private var lastPingMs = -1L
 
     private val scanHandler = Handler(Looper.getMainLooper())
     private val scanRunnable = object : Runnable {
@@ -58,7 +59,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ТАЙМЕР ЖИВОГО ОБНОВЛЕНИЯ (Теперь обновляет вообще всё в блоке соединения)
     private val liveGraphHandler = Handler(Looper.getMainLooper())
     private val liveGraphRunnable = object : Runnable {
         override fun run() {
@@ -68,17 +68,14 @@ class MainActivity : AppCompatActivity() {
                     graphSignal.visibility = View.VISIBLE
                     graphSignal.addDataPoint(stats.rssi)
 
-                    // Динамическое обновление полосы прогресса
                     findViewById<ProgressBar>(R.id.pbQuality).progress = stats.qualityScore
 
-                    // Динамическое обновление процентов с перекраской
                     val qColor = if (stats.qualityScore > 75) "#4CAF50" else if (stats.qualityScore > 40) "#FFC107" else "#F44336"
                     findViewById<TextView>(R.id.tvQualityScore).apply {
                         text = "Качество связи: ${stats.qualityScore}%"
                         setTextColor(Color.parseColor(qColor))
                     }
 
-                    // Динамическое обновление текста (Пинг берем из памяти)
                     val details = "• Сеть: ${stats.ssid}\n• Шифрование: ${stats.securityType}\n• Частота: ${stats.frequency} MHz\n• Теорет. линк: ${stats.linkSpeed} Mbps\n• Сигнал: ${stats.rssi} dBm\n• Пинг: ${if (lastPingMs >= 0) "$lastPingMs ms" else "N/A"}"
                     tvConnectionDetails.text = details
                 } else {
@@ -165,60 +162,41 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun updateButtonVisuals(button: Button, isActive: Boolean, hasFocus: Boolean, activeColorHex: String) {
-        val bg = android.graphics.drawable.GradientDrawable()
-        bg.cornerRadius = 16f
-        bg.setColor(Color.parseColor(if (isActive) activeColorHex else "#333333"))
-
-        if (hasFocus) {
-            bg.setStroke(6, Color.WHITE)
-            button.animate().scaleX(1.05f).scaleY(1.05f).translationZ(10f).setDuration(150).start()
-        } else {
-            bg.setStroke(0, Color.TRANSPARENT)
-            button.animate().scaleX(1.0f).scaleY(1.0f).translationZ(0f).setDuration(150).start()
-        }
-
-        button.background = bg
-        button.backgroundTintList = null
-
-        if (isActive && activeColorHex == "#4CAF50") {
-            button.setTextColor(Color.BLACK)
-        } else {
-            button.setTextColor(Color.WHITE)
-        }
-    }
-
+    // Идеальная анимация фокуса для ТВ (Через Foreground, без поломки цветов)
     private fun setupTvFocusAnimations() {
-        btnAnalyze.onFocusChangeListener = View.OnFocusChangeListener { v, focus ->
-            updateButtonVisuals(v as Button, true, focus, "#4CAF50")
-        }
-        btnExportReport.onFocusChangeListener = View.OnFocusChangeListener { v, focus ->
-            updateButtonVisuals(v as Button, true, focus, "#673AB7")
-        }
-
-        val tabFocusListener = View.OnFocusChangeListener { v, focus ->
-            updateButtonVisuals(tabHardware, currentTabIndex == 0, tabHardware.hasFocus(), "#4CAF50")
-            updateButtonVisuals(tabScanner, currentTabIndex == 1, tabScanner.hasFocus(), "#03A9F4")
-            updateButtonVisuals(tabDebug, currentTabIndex == 2, tabDebug.hasFocus(), "#673AB7")
-        }
-
-        tabHardware.onFocusChangeListener = tabFocusListener
-        tabScanner.onFocusChangeListener = tabFocusListener
-        tabDebug.onFocusChangeListener = tabFocusListener
-
-        val blockFocusListener = View.OnFocusChangeListener { view, hasFocus ->
+        // Анимация для интерактивных кнопок (Увеличиваются + Белая рамка)
+        val buttonFocusListener = View.OnFocusChangeListener { view, hasFocus ->
             if (hasFocus) {
-                val bgWithBorder = android.graphics.drawable.GradientDrawable()
-                bgWithBorder.setColor(Color.parseColor("#1E1E1E"))
-                bgWithBorder.setStroke(6, Color.WHITE)
-                view.background = bgWithBorder
+                val border = android.graphics.drawable.GradientDrawable()
+                border.setColor(Color.TRANSPARENT)
+                border.setStroke(8, Color.WHITE)
+                border.cornerRadius = 16f
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) { view.foreground = border }
+                view.animate().scaleX(1.05f).scaleY(1.05f).translationZ(10f).setDuration(150).start()
             } else {
-                val bgNormal = android.graphics.drawable.GradientDrawable()
-                bgNormal.setColor(Color.parseColor("#1E1E1E"))
-                bgNormal.setStroke(0, Color.TRANSPARENT)
-                view.background = bgNormal
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) { view.foreground = null }
+                view.animate().scaleX(1.0f).scaleY(1.0f).translationZ(0f).setDuration(150).start()
             }
         }
+
+        // Анимация для информационных блоков (Только рамка, без увеличения)
+        val blockFocusListener = View.OnFocusChangeListener { view, hasFocus ->
+            if (hasFocus) {
+                val border = android.graphics.drawable.GradientDrawable()
+                border.setColor(Color.TRANSPARENT)
+                border.setStroke(8, Color.WHITE)
+                border.cornerRadius = 16f
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) { view.foreground = border }
+            } else {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) { view.foreground = null }
+            }
+        }
+
+        tabHardware.onFocusChangeListener = buttonFocusListener
+        tabScanner.onFocusChangeListener = buttonFocusListener
+        tabDebug.onFocusChangeListener = buttonFocusListener
+        btnAnalyze.onFocusChangeListener = buttonFocusListener
+        btnExportReport.onFocusChangeListener = buttonFocusListener
 
         blockHardware.onFocusChangeListener = blockFocusListener
         blockStandards.onFocusChangeListener = blockFocusListener
@@ -232,6 +210,7 @@ class MainActivity : AppCompatActivity() {
         switchTab(0)
     }
 
+    // Родная перекраска вкладок без костылей
     private fun switchTab(index: Int) {
         currentTabIndex = index
 
@@ -239,9 +218,14 @@ class MainActivity : AppCompatActivity() {
         layoutScanner.visibility = if (index == 1) View.VISIBLE else View.GONE
         layoutDebug.visibility = if (index == 2) View.VISIBLE else View.GONE
 
-        updateButtonVisuals(tabHardware, index == 0, tabHardware.hasFocus(), "#4CAF50")
-        updateButtonVisuals(tabScanner, index == 1, tabScanner.hasFocus(), "#03A9F4")
-        updateButtonVisuals(tabDebug, index == 2, tabDebug.hasFocus(), "#673AB7")
+        tabHardware.backgroundTintList = ColorStateList.valueOf(Color.parseColor(if (index == 0) "#4CAF50" else "#333333"))
+        tabHardware.setTextColor(if (index == 0) Color.BLACK else Color.WHITE)
+
+        tabScanner.backgroundTintList = ColorStateList.valueOf(Color.parseColor(if (index == 1) "#03A9F4" else "#333333"))
+        tabScanner.setTextColor(if (index == 1) Color.BLACK else Color.WHITE)
+
+        tabDebug.backgroundTintList = ColorStateList.valueOf(Color.parseColor(if (index == 2) "#673AB7" else "#333333"))
+        tabDebug.setTextColor(Color.WHITE)
 
         if (index == 0) {
             liveGraphHandler.removeCallbacks(liveGraphRunnable)
@@ -275,7 +259,7 @@ class MainActivity : AppCompatActivity() {
             val prefs = getSharedPreferences("WifiPrefs", Context.MODE_PRIVATE)
 
             runOnUiThread {
-                lastPingMs = report.pingMs // Запоминаем пинг для живого графика
+                lastPingMs = report.pingMs
 
                 findViewById<TextView>(R.id.tvBand5G).apply {
                     text = "• 5 GHz Диапазон: " + if (report.is5GSupported) "Поддерживается" else "Нет"
