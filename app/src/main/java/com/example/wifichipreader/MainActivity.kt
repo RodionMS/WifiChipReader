@@ -18,6 +18,7 @@ import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -40,6 +41,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnExportReport: Button
     private lateinit var tvDebugConsole: TextView
 
+    private lateinit var blockHardware: LinearLayout
+    private lateinit var blockStandards: LinearLayout
+    private lateinit var blockConnection: LinearLayout
+    private lateinit var graphSignal: SignalGraphView
+    private lateinit var tvConnectionDetails: TextView
+
+    private var currentTabIndex = 0
+    private var lastPingMs = -1L // Храним последний пинг, чтобы не вешать UI ежесекундно
+
     private val scanHandler = Handler(Looper.getMainLooper())
     private val scanRunnable = object : Runnable {
         override fun run() {
@@ -47,7 +57,40 @@ class MainActivity : AppCompatActivity() {
             scanHandler.postDelayed(this, 8000)
         }
     }
-    private var isScannerActive = false
+
+    // ТАЙМЕР ЖИВОГО ОБНОВЛЕНИЯ (Теперь обновляет вообще всё в блоке соединения)
+    private val liveGraphHandler = Handler(Looper.getMainLooper())
+    private val liveGraphRunnable = object : Runnable {
+        override fun run() {
+            if (currentTabIndex == 0) {
+                val stats = analyzer.getLiveStats()
+                if (stats.hasConnection) {
+                    graphSignal.visibility = View.VISIBLE
+                    graphSignal.addDataPoint(stats.rssi)
+
+                    // Динамическое обновление полосы прогресса
+                    findViewById<ProgressBar>(R.id.pbQuality).progress = stats.qualityScore
+
+                    // Динамическое обновление процентов с перекраской
+                    val qColor = if (stats.qualityScore > 75) "#4CAF50" else if (stats.qualityScore > 40) "#FFC107" else "#F44336"
+                    findViewById<TextView>(R.id.tvQualityScore).apply {
+                        text = "Качество связи: ${stats.qualityScore}%"
+                        setTextColor(Color.parseColor(qColor))
+                    }
+
+                    // Динамическое обновление текста (Пинг берем из памяти)
+                    val details = "• Сеть: ${stats.ssid}\n• Шифрование: ${stats.securityType}\n• Частота: ${stats.frequency} MHz\n• Теорет. линк: ${stats.linkSpeed} Mbps\n• Сигнал: ${stats.rssi} dBm\n• Пинг: ${if (lastPingMs >= 0) "$lastPingMs ms" else "N/A"}"
+                    tvConnectionDetails.text = details
+                } else {
+                    graphSignal.visibility = View.GONE
+                    findViewById<ProgressBar>(R.id.pbQuality).progress = 0
+                    findViewById<TextView>(R.id.tvQualityScore).text = "Нет активного подключения"
+                    tvConnectionDetails.text = "Информация недоступна"
+                }
+            }
+            liveGraphHandler.postDelayed(this, 1000)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,8 +103,9 @@ class MainActivity : AppCompatActivity() {
 
         initViews()
         requestPermissionsIfNeeded()
-        setupTvFocusAnimations() // Устанавливаем ТВ рамки (Foreground)
-        setupTabs()              // Запускаем старую надежную логику вкладок
+        setupTvFocusAnimations()
+        setupTabs()
+        setupTooltips()
 
         btnAnalyze.setOnClickListener { runHardwareScan() }
         btnExportReport.setOnClickListener { exportDebugReport() }
@@ -82,40 +126,105 @@ class MainActivity : AppCompatActivity() {
         btnAnalyze = findViewById(R.id.btnAnalyze)
         btnExportReport = findViewById(R.id.btnExportReport)
         tvDebugConsole = findViewById(R.id.tvDebugConsole)
+
+        blockHardware = findViewById(R.id.blockHardware)
+        blockStandards = findViewById(R.id.blockStandards)
+        blockConnection = findViewById(R.id.blockConnection)
+        graphSignal = findViewById(R.id.graphSignal)
+        tvConnectionDetails = findViewById(R.id.tvConnectionDetails)
     }
 
-    // ИДЕАЛЬНАЯ ЛОГИКА ТВ ФОКУСА (Без поломки цветов вкладок)
-    private fun setupTvFocusAnimations() {
-        val focusListener = View.OnFocusChangeListener { view, hasFocus ->
-            if (hasFocus) {
-                // Создаем белую рамку
-                val border = android.graphics.drawable.GradientDrawable()
-                border.setColor(Color.TRANSPARENT)
-                border.setStroke(8, Color.WHITE)
-                border.cornerRadius = 16f
+    private fun setupTooltips() {
+        blockHardware.setOnClickListener {
+            showInfoDialog(
+                "Аппаратные диапазоны",
+                "• 5 GHz: Высокая скорость, но малый радиус (сигнал плохо проходит сквозь стены).\n\n• 6 GHz: Свободный от помех диапазон (Wi-Fi 6E и Wi-Fi 7)."
+            )
+        }
 
-                // Накладываем поверх элемента
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    view.foreground = border
-                }
-                view.animate().scaleX(1.05f).scaleY(1.05f).translationZ(10f).setDuration(150).start()
+        blockStandards.setOnClickListener {
+            showInfoDialog(
+                "Стандарты связи",
+                "• Wi-Fi 4 (n): Базовый стандарт.\n• Wi-Fi 5 (ac): Отлично для 4K.\n• Wi-Fi 6 (ax): Не боится загруженного эфира.\n• Wi-Fi 7 (be): Каналы 320 МГц, сверхвысокие скорости."
+            )
+        }
+
+        blockConnection.setOnClickListener {
+            showInfoDialog(
+                "Соединение",
+                "Весь этот блок обновляется в реальном времени.\nГрафик показывает живое изменение уровня сигнала (RSSI). Идеальное значение: от -30 до -50 dBm. Если график падает ниже -75 dBm — возможны обрывы сети."
+            )
+        }
+    }
+
+    private fun showInfoDialog(title: String, message: String) {
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setMessage(message)
+            .setPositiveButton("Понятно") { dialog, _ -> dialog.dismiss() }
+            .show()
+    }
+
+    private fun updateButtonVisuals(button: Button, isActive: Boolean, hasFocus: Boolean, activeColorHex: String) {
+        val bg = android.graphics.drawable.GradientDrawable()
+        bg.cornerRadius = 16f
+        bg.setColor(Color.parseColor(if (isActive) activeColorHex else "#333333"))
+
+        if (hasFocus) {
+            bg.setStroke(6, Color.WHITE)
+            button.animate().scaleX(1.05f).scaleY(1.05f).translationZ(10f).setDuration(150).start()
+        } else {
+            bg.setStroke(0, Color.TRANSPARENT)
+            button.animate().scaleX(1.0f).scaleY(1.0f).translationZ(0f).setDuration(150).start()
+        }
+
+        button.background = bg
+        button.backgroundTintList = null
+
+        if (isActive && activeColorHex == "#4CAF50") {
+            button.setTextColor(Color.BLACK)
+        } else {
+            button.setTextColor(Color.WHITE)
+        }
+    }
+
+    private fun setupTvFocusAnimations() {
+        btnAnalyze.onFocusChangeListener = View.OnFocusChangeListener { v, focus ->
+            updateButtonVisuals(v as Button, true, focus, "#4CAF50")
+        }
+        btnExportReport.onFocusChangeListener = View.OnFocusChangeListener { v, focus ->
+            updateButtonVisuals(v as Button, true, focus, "#673AB7")
+        }
+
+        val tabFocusListener = View.OnFocusChangeListener { v, focus ->
+            updateButtonVisuals(tabHardware, currentTabIndex == 0, tabHardware.hasFocus(), "#4CAF50")
+            updateButtonVisuals(tabScanner, currentTabIndex == 1, tabScanner.hasFocus(), "#03A9F4")
+            updateButtonVisuals(tabDebug, currentTabIndex == 2, tabDebug.hasFocus(), "#673AB7")
+        }
+
+        tabHardware.onFocusChangeListener = tabFocusListener
+        tabScanner.onFocusChangeListener = tabFocusListener
+        tabDebug.onFocusChangeListener = tabFocusListener
+
+        val blockFocusListener = View.OnFocusChangeListener { view, hasFocus ->
+            if (hasFocus) {
+                val bgWithBorder = android.graphics.drawable.GradientDrawable()
+                bgWithBorder.setColor(Color.parseColor("#1E1E1E"))
+                bgWithBorder.setStroke(6, Color.WHITE)
+                view.background = bgWithBorder
             } else {
-                // Убираем рамку
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    view.foreground = null
-                }
-                view.animate().scaleX(1.0f).scaleY(1.0f).translationZ(0f).setDuration(150).start()
+                val bgNormal = android.graphics.drawable.GradientDrawable()
+                bgNormal.setColor(Color.parseColor("#1E1E1E"))
+                bgNormal.setStroke(0, Color.TRANSPARENT)
+                view.background = bgNormal
             }
         }
 
-        tabHardware.onFocusChangeListener = focusListener
-        tabScanner.onFocusChangeListener = focusListener
-        tabDebug.onFocusChangeListener = focusListener
-        btnAnalyze.onFocusChangeListener = focusListener
-        btnExportReport.onFocusChangeListener = focusListener
+        blockHardware.onFocusChangeListener = blockFocusListener
+        blockStandards.onFocusChangeListener = blockFocusListener
+        blockConnection.onFocusChangeListener = blockFocusListener
     }
 
-    // ВОЗВРАТ К СТАРОЙ, РАБОЧЕЙ ЛОГИКЕ ВКЛАДОК
     private fun setupTabs() {
         tabHardware.setOnClickListener { switchTab(0) }
         tabScanner.setOnClickListener { switchTab(1) }
@@ -124,21 +233,29 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun switchTab(index: Int) {
+        currentTabIndex = index
+
         layoutHardware.visibility = if (index == 0) View.VISIBLE else View.GONE
         layoutScanner.visibility = if (index == 1) View.VISIBLE else View.GONE
         layoutDebug.visibility = if (index == 2) View.VISIBLE else View.GONE
 
-        // Цвета назначаются жестко и больше не конфликтуют с фокусом
-        tabHardware.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor(if (index == 0) "#4CAF50" else "#333333"))
-        tabHardware.setTextColor(if (index == 0) Color.BLACK else Color.WHITE)
+        updateButtonVisuals(tabHardware, index == 0, tabHardware.hasFocus(), "#4CAF50")
+        updateButtonVisuals(tabScanner, index == 1, tabScanner.hasFocus(), "#03A9F4")
+        updateButtonVisuals(tabDebug, index == 2, tabDebug.hasFocus(), "#673AB7")
 
-        tabScanner.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor(if (index == 1) "#03A9F4" else "#333333"))
-        tabScanner.setTextColor(if (index == 1) Color.BLACK else Color.WHITE)
+        if (index == 0) {
+            liveGraphHandler.removeCallbacks(liveGraphRunnable)
+            liveGraphHandler.post(liveGraphRunnable)
+        } else {
+            liveGraphHandler.removeCallbacks(liveGraphRunnable)
+        }
 
-        tabDebug.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor(if (index == 2) "#673AB7" else "#333333"))
-        tabDebug.setTextColor(if (index == 2) Color.WHITE else Color.WHITE)
-
-        if (index == 1) startAutoScan() else stopAutoScan()
+        if (index == 1) {
+            scanHandler.removeCallbacks(scanRunnable)
+            scanHandler.post(scanRunnable)
+        } else {
+            scanHandler.removeCallbacks(scanRunnable)
+        }
 
         if (index == 2) {
             tvDebugConsole.text = "Сбор логов системы..."
@@ -158,11 +275,12 @@ class MainActivity : AppCompatActivity() {
             val prefs = getSharedPreferences("WifiPrefs", Context.MODE_PRIVATE)
 
             runOnUiThread {
+                lastPingMs = report.pingMs // Запоминаем пинг для живого графика
+
                 findViewById<TextView>(R.id.tvBand5G).apply {
                     text = "• 5 GHz Диапазон: " + if (report.is5GSupported) "Поддерживается" else "Нет"
                     setTextColor(Color.parseColor(if (report.is5GSupported) "#4CAF50" else "#F44336"))
                 }
-
                 findViewById<TextView>(R.id.tvBand6G).apply {
                     text = "• 6 GHz Диапазон: " + if (report.is6GSupported) "Поддерживается" else "Нет"
                     setTextColor(Color.parseColor(if (report.is6GSupported) "#4CAF50" else "#888888"))
@@ -202,54 +320,19 @@ class MainActivity : AppCompatActivity() {
                     setTextColor(if (hasWifi7) colorGreen else colorGray)
                 }
 
-                if (report.hasConnection) {
-                    findViewById<ProgressBar>(R.id.pbQuality).progress = report.qualityScore
-
-                    val qColor = if (report.qualityScore > 75) "#4CAF50" else if (report.qualityScore > 40) "#FFC107" else "#F44336"
-                    findViewById<TextView>(R.id.tvQualityScore).apply {
-                        text = "Качество связи: ${report.qualityScore}%"
-                        setTextColor(Color.parseColor(qColor))
-                    }
-
-                    val details = "• Сеть: ${report.ssid}\n• Шифрование: ${report.securityType}\n• Частота: ${report.frequency} MHz\n• Теорет. линк: ${report.linkSpeed} Mbps\n• Сигнал: ${report.rssi} dBm\n• Пинг: ${if (report.pingMs >= 0) "${report.pingMs} ms" else "N/A"}"
-                    findViewById<TextView>(R.id.tvConnectionDetails).text = details
-                } else {
-                    findViewById<ProgressBar>(R.id.pbQuality).progress = 0
-                    findViewById<TextView>(R.id.tvQualityScore).text = "Нет активного подключения"
-                    findViewById<TextView>(R.id.tvConnectionDetails).text = "Информация недоступна"
-                }
-
                 btnAnalyze.isEnabled = true
                 btnAnalyze.text = "Просканировать систему"
             }
         }.start()
     }
 
-    private fun isLocationEnabled(): Boolean {
-        val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            locationManager.isLocationEnabled
-        } else {
-            locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) || locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
-        }
-    }
-
-    private fun startAutoScan() {
-        isScannerActive = true
-        runEtherScan()
-        scanHandler.removeCallbacks(scanRunnable)
-        scanHandler.postDelayed(scanRunnable, 8000)
-    }
-
-    private fun stopAutoScan() {
-        isScannerActive = false
-        scanHandler.removeCallbacks(scanRunnable)
-    }
-
     private fun runEtherScan() {
+        val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        val isLocEnabled = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) locationManager.isLocationEnabled else (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) || locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER))
+
         containerNetworks.removeAllViews()
 
-        if (!isLocationEnabled()) {
+        if (!isLocEnabled) {
             val emptyTv = TextView(this).apply {
                 text = "ВНИМАНИЕ: Геолокация (GPS) выключена!\n\nВключите её для сканирования сетей."
                 setTextColor(Color.parseColor("#F44336"))
@@ -278,9 +361,7 @@ class MainActivity : AppCompatActivity() {
                 orientation = LinearLayout.VERTICAL
                 setBackgroundColor(Color.parseColor("#1E1E1E"))
                 setPadding(32, 24, 32, 24)
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                    setMargins(0, 0, 0, 16)
-                }
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { setMargins(0, 0, 0, 16) }
             }
 
             val title = TextView(this).apply {
@@ -329,12 +410,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
-        stopAutoScan()
+        scanHandler.removeCallbacks(scanRunnable)
+        liveGraphHandler.removeCallbacks(liveGraphRunnable)
     }
 
     override fun onResume() {
         super.onResume()
-        if (isScannerActive) startAutoScan()
+        if (currentTabIndex == 0) liveGraphHandler.post(liveGraphRunnable)
+        if (currentTabIndex == 1) scanHandler.post(scanRunnable)
     }
 
     private fun requestPermissionsIfNeeded() {
@@ -342,8 +425,9 @@ class MainActivity : AppCompatActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             permissions.add(Manifest.permission.ACCESS_COARSE_LOCATION)
         }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, permissions.toTypedArray(), 100)
+        val missingPermissions = permissions.filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
+        if (missingPermissions.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, missingPermissions.toTypedArray(), 100)
         }
     }
 }

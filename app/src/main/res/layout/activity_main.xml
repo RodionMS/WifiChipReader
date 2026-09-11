@@ -15,7 +15,6 @@
         android:gravity="center"
         android:padding="16dp" />
 
-    <!-- Панель вкладок -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -68,7 +67,6 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
-        <!-- ВКЛАДКА 1: ТТХ Чипа -->
         <ScrollView
             android:id="@+id/layoutHardware"
             android:layout_width="match_parent"
@@ -92,28 +90,32 @@
                     android:stateListAnimator="@null"
                     android:layout_marginBottom="16dp" />
 
-                <!-- Блок аппаратных возможностей -->
                 <LinearLayout
+                    android:id="@+id/blockHardware"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
                     android:background="#1E1E1E"
                     android:padding="16dp"
-                    android:layout_marginBottom="16dp">
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="АППАРАТНЫЕ ВОЗМОЖНОСТИ ЧИПА" android:textColor="#888888" android:textSize="12sp" android:textStyle="bold" android:layout_marginBottom="10dp" />
+                    android:layout_marginBottom="16dp"
+                    android:focusable="true"
+                    android:clickable="true">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="АППАРАТНЫЕ ВОЗМОЖНОСТИ (INFO ⓘ)" android:textColor="#888888" android:textSize="12sp" android:textStyle="bold" android:layout_marginBottom="10dp" />
                     <TextView android:id="@+id/tvBand5G" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#E0E0E0" android:layout_marginBottom="6dp" />
                     <TextView android:id="@+id/tvBand6G" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#E0E0E0" />
                 </LinearLayout>
 
-                <!-- Блок стандартов -->
                 <LinearLayout
+                    android:id="@+id/blockStandards"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
                     android:background="#1E1E1E"
                     android:padding="16dp"
-                    android:layout_marginBottom="16dp">
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="ПОДДЕРЖКА СТАНДАРТОВ" android:textColor="#888888" android:textSize="12sp" android:textStyle="bold" android:layout_marginBottom="10dp" />
+                    android:layout_marginBottom="16dp"
+                    android:focusable="true"
+                    android:clickable="true">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="ПОДДЕРЖКА СТАНДАРТОВ (INFO ⓘ)" android:textColor="#888888" android:textSize="12sp" android:textStyle="bold" android:layout_marginBottom="10dp" />
                     <TextView android:id="@+id/tvWifi1" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="6dp" />
                     <TextView android:id="@+id/tvWifi2" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="6dp" />
                     <TextView android:id="@+id/tvWifi3" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="6dp" />
@@ -123,15 +125,17 @@
                     <TextView android:id="@+id/tvWifi7" android:layout_width="match_parent" android:layout_height="wrap_content" />
                 </LinearLayout>
 
-                <!-- Текущее соединение -->
                 <LinearLayout
+                    android:id="@+id/blockConnection"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
                     android:background="#1E1E1E"
                     android:padding="16dp"
-                    android:layout_marginBottom="16dp">
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="ТЕКУЩЕЕ СОЕДИНЕНИЕ И СТАТУС" android:textColor="#888888" android:textSize="12sp" android:textStyle="bold" android:layout_marginBottom="10dp" />
+                    android:layout_marginBottom="16dp"
+                    android:focusable="true"
+                    android:clickable="true">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="ТЕКУЩЕЕ СОЕДИНЕНИЕ (INFO ⓘ)" android:textColor="#888888" android:textSize="12sp" android:textStyle="bold" android:layout_marginBottom="10dp" />
 
                     <ProgressBar
                         android:id="@+id/pbQuality"
@@ -145,11 +149,19 @@
 
                     <TextView android:id="@+id/tvQualityScore" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Качество связи: Ожидание..." android:textColor="#E0E0E0" android:textStyle="bold" android:layout_marginBottom="10dp" />
                     <TextView android:id="@+id/tvConnectionDetails" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#AAAAAA" android:lineSpacingExtra="5dp" />
+
+                    <!-- НОВЫЙ КОМПОНЕНТ: Живой график сигнала -->
+                    <com.example.wifichipreader.SignalGraphView
+                        android:id="@+id/graphSignal"
+                        android:layout_width="match_parent"
+                        android:layout_height="80dp"
+                        android:layout_marginTop="12dp"
+                        android:visibility="gone" />
+
                 </LinearLayout>
             </LinearLayout>
         </ScrollView>
 
-        <!-- ВКЛАДКА 2: Сканер эфира -->
         <ScrollView
             android:id="@+id/layoutScanner"
             android:layout_width="match_parent"
@@ -182,7 +194,6 @@
             </LinearLayout>
         </ScrollView>
 
-        <!-- ВКЛАДКА 3: DEBUG -->
         <ScrollView
             android:id="@+id/layoutDebug"
             android:layout_width="match_parent"

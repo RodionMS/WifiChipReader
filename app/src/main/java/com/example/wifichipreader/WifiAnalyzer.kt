@@ -50,6 +50,17 @@ class WifiAnalyzer(private val context: Context) {
         val security: String
     )
 
+    // Расширенная модель для обновления всего блока в реальном времени
+    data class LiveStats(
+        val hasConnection: Boolean,
+        val ssid: String,
+        val securityType: String,
+        val frequency: Int,
+        val rssi: Int,
+        val linkSpeed: Int,
+        val qualityScore: Int
+    )
+
     fun getHardwareReport(): HardwareReport {
         val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
 
@@ -91,6 +102,29 @@ class WifiAnalyzer(private val context: Context) {
             wifiInfo.ssid?.replace("\"", "") ?: "",
             freq, linkSpeed, rssi, securityType, pingMs, quality
         )
+    }
+
+    // Мгновенный сбор всех данных для графика и текстового блока (без пинга)
+    fun getLiveStats(): LiveStats {
+        val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        val wifiInfo = wifiManager.connectionInfo
+        val freq = wifiInfo.frequency
+        val hasConnection = freq > 0 && wifiInfo.ssid != null && wifiInfo.ssid != "<unknown ssid>"
+
+        var ssid = ""
+        var securityType = "Открытая сеть"
+        var quality = 0
+
+        if (hasConnection) {
+            ssid = wifiInfo.ssid?.replace("\"", "") ?: ""
+            quality = calculateQualityScore(wifiInfo.rssi, wifiInfo.linkSpeed)
+            try {
+                val matched = wifiManager.scanResults.find { it.SSID == ssid }
+                if (matched != null) securityType = getSecurityString(matched.capabilities)
+            } catch (e: Exception) {}
+        }
+
+        return LiveStats(hasConnection, ssid, securityType, freq, wifiInfo.rssi, wifiInfo.linkSpeed, quality)
     }
 
     @Suppress("DEPRECATION")
