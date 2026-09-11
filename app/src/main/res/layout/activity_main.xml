@@ -166,7 +166,7 @@
                     android:id="@+id/tvAutoScanIndicator"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Автообновление эфира: каждые 3 сек..."
+                    android:text="Автообновление эфира: каждые 8 сек..."
                     android:textColor="#03A9F4"
                     android:textSize="14sp"
                     android:textStyle="italic"
@@ -182,7 +182,7 @@
             </LinearLayout>
         </ScrollView>
 
-        <!-- ВКЛАДКА 3: DEBUG (Сырые данные) -->
+        <!-- ВКЛАДКА 3: DEBUG -->
         <ScrollView
             android:id="@+id/layoutDebug"
             android:layout_width="match_parent"

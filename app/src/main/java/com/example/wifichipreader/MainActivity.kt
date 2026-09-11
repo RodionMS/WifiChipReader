@@ -4,11 +4,13 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.location.LocationManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.view.Gravity
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
@@ -42,7 +44,7 @@ class MainActivity : AppCompatActivity() {
     private val scanRunnable = object : Runnable {
         override fun run() {
             runEtherScan()
-            scanHandler.postDelayed(this, 3000)
+            scanHandler.postDelayed(this, 8000)
         }
     }
     private var isScannerActive = false
@@ -50,12 +52,16 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        AppLog.messages.clear()
+        AppLog.i("App", "Приложение запущено")
+
         analyzer = WifiAnalyzer(this)
 
         initViews()
         requestPermissionsIfNeeded()
-        setupTabs()
-        setupTvFocusAnimations()
+        setupTvFocusAnimations() // Устанавливаем ТВ рамки (Foreground)
+        setupTabs()              // Запускаем старую надежную логику вкладок
 
         btnAnalyze.setOnClickListener { runHardwareScan() }
         btnExportReport.setOnClickListener { exportDebugReport() }
@@ -78,11 +84,26 @@ class MainActivity : AppCompatActivity() {
         tvDebugConsole = findViewById(R.id.tvDebugConsole)
     }
 
+    // ИДЕАЛЬНАЯ ЛОГИКА ТВ ФОКУСА (Без поломки цветов вкладок)
     private fun setupTvFocusAnimations() {
         val focusListener = View.OnFocusChangeListener { view, hasFocus ->
             if (hasFocus) {
+                // Создаем белую рамку
+                val border = android.graphics.drawable.GradientDrawable()
+                border.setColor(Color.TRANSPARENT)
+                border.setStroke(8, Color.WHITE)
+                border.cornerRadius = 16f
+
+                // Накладываем поверх элемента
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    view.foreground = border
+                }
                 view.animate().scaleX(1.05f).scaleY(1.05f).translationZ(10f).setDuration(150).start()
             } else {
+                // Убираем рамку
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    view.foreground = null
+                }
                 view.animate().scaleX(1.0f).scaleY(1.0f).translationZ(0f).setDuration(150).start()
             }
         }
@@ -94,10 +115,12 @@ class MainActivity : AppCompatActivity() {
         btnExportReport.onFocusChangeListener = focusListener
     }
 
+    // ВОЗВРАТ К СТАРОЙ, РАБОЧЕЙ ЛОГИКЕ ВКЛАДОК
     private fun setupTabs() {
         tabHardware.setOnClickListener { switchTab(0) }
         tabScanner.setOnClickListener { switchTab(1) }
         tabDebug.setOnClickListener { switchTab(2) }
+        switchTab(0)
     }
 
     private fun switchTab(index: Int) {
@@ -105,6 +128,7 @@ class MainActivity : AppCompatActivity() {
         layoutScanner.visibility = if (index == 1) View.VISIBLE else View.GONE
         layoutDebug.visibility = if (index == 2) View.VISIBLE else View.GONE
 
+        // Цвета назначаются жестко и больше не конфликтуют с фокусом
         tabHardware.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor(if (index == 0) "#4CAF50" else "#333333"))
         tabHardware.setTextColor(if (index == 0) Color.BLACK else Color.WHITE)
 
@@ -187,7 +211,7 @@ class MainActivity : AppCompatActivity() {
                         setTextColor(Color.parseColor(qColor))
                     }
 
-                    val details = "• Сеть: ${report.ssid}\n• Шифрование: ${report.securityType}\n• Частота: ${report.frequency} MHz\n• Скорость: ${report.linkSpeed} Mbps\n• Сигнал: ${report.rssi} dBm\n• Пинг: ${if (report.pingMs >= 0) "${report.pingMs} ms" else "N/A"}"
+                    val details = "• Сеть: ${report.ssid}\n• Шифрование: ${report.securityType}\n• Частота: ${report.frequency} MHz\n• Теорет. линк: ${report.linkSpeed} Mbps\n• Сигнал: ${report.rssi} dBm\n• Пинг: ${if (report.pingMs >= 0) "${report.pingMs} ms" else "N/A"}"
                     findViewById<TextView>(R.id.tvConnectionDetails).text = details
                 } else {
                     findViewById<ProgressBar>(R.id.pbQuality).progress = 0
@@ -201,11 +225,20 @@ class MainActivity : AppCompatActivity() {
         }.start()
     }
 
+    private fun isLocationEnabled(): Boolean {
+        val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            locationManager.isLocationEnabled
+        } else {
+            locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) || locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+        }
+    }
+
     private fun startAutoScan() {
         isScannerActive = true
         runEtherScan()
         scanHandler.removeCallbacks(scanRunnable)
-        scanHandler.postDelayed(scanRunnable, 3000)
+        scanHandler.postDelayed(scanRunnable, 8000)
     }
 
     private fun stopAutoScan() {
@@ -214,12 +247,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun runEtherScan() {
-        val networks = analyzer.scanEther()
         containerNetworks.removeAllViews()
+
+        if (!isLocationEnabled()) {
+            val emptyTv = TextView(this).apply {
+                text = "ВНИМАНИЕ: Геолокация (GPS) выключена!\n\nВключите её для сканирования сетей."
+                setTextColor(Color.parseColor("#F44336"))
+                textSize = 16f
+                gravity = Gravity.CENTER
+                setPadding(0, 50, 0, 0)
+            }
+            containerNetworks.addView(emptyTv)
+            return
+        }
+
+        val networks = analyzer.scanEther()
 
         if (networks.isEmpty()) {
             val emptyTv = TextView(this).apply {
-                text = "Идет сканирование... Убедитесь, что включена геолокация (GPS)."
+                text = "Идет сканирование (сетей пока не найдено)..."
                 setTextColor(Color.parseColor("#AAAAAA"))
                 textSize = 14f
             }

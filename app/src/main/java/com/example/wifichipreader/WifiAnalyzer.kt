@@ -8,6 +8,21 @@ import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
 import java.net.InetAddress
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+object AppLog {
+    val messages = java.lang.StringBuilder()
+
+    private fun log(level: String, tag: String, msg: String) {
+        val time = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())
+        messages.append("[$time] [$level] $tag: $msg\n")
+    }
+
+    fun e(tag: String, msg: String) = log("ERROR", tag, msg)
+    fun i(tag: String, msg: String) = log("INFO", tag, msg)
+}
 
 class WifiAnalyzer(private val context: Context) {
 
@@ -78,11 +93,13 @@ class WifiAnalyzer(private val context: Context) {
         )
     }
 
+    @Suppress("DEPRECATION")
     fun scanEther(): List<NetworkInfo> {
         val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
         val results = mutableListOf<NetworkInfo>()
 
         try {
+            wifiManager.startScan()
             val scanResults = wifiManager.scanResults
             for (scan in scanResults) {
                 val ssid = if (scan.SSID.isNullOrEmpty()) "[Скрытая сеть]" else scan.SSID
@@ -98,7 +115,9 @@ class WifiAnalyzer(private val context: Context) {
                     )
                 )
             }
-        } catch (e: Exception) {}
+        } catch (e: Exception) {
+            AppLog.e("EtherScan", "Ошибка сканирования: ${e.message}")
+        }
 
         return results.sortedByDescending { it.rssi }
     }
@@ -109,7 +128,7 @@ class WifiAnalyzer(private val context: Context) {
 
         val secondChar = cleanMac[1]
         if (secondChar == '2' || secondChar == '6' || secondChar == 'A' || secondChar == 'E') {
-            return "Случайный MAC (Hotspot/Рандом)"
+            return "Случайный MAC (Hotspot)"
         }
 
         val oui = cleanMac.substring(0, 6)
@@ -125,15 +144,13 @@ class WifiAnalyzer(private val context: Context) {
             "0012A9", "0014D8", "0495E6" -> "Tenda"
             "00A0F8", "082697", "480033" -> "Mercusys"
             "107C61", "000393", "000A27" -> "Apple"
-            else -> "Неизвестный вендор"
+            else -> "Неизвестно"
         }
     }
 
     private fun calculateQualityScore(rssi: Int, linkSpeed: Int): Int {
         var score = 100
-        if (rssi < -50) {
-            score -= (rssi + 50) * -2
-        }
+        if (rssi < -50) score -= (rssi + 50) * -2
         if (linkSpeed in 1..99) score -= 10
         if (linkSpeed in 1..29) score -= 10
         return score.coerceIn(0, 100)
@@ -164,18 +181,24 @@ class WifiAnalyzer(private val context: Context) {
             val startTime = System.currentTimeMillis()
             val reachable = InetAddress.getByName(host).isReachable(1500)
             if (reachable) System.currentTimeMillis() - startTime else -1L
-        } catch (e: Exception) { -1L }
+        } catch (e: Exception) {
+            AppLog.e("Ping", "Сбой пинга: ${e.message}")
+            -1L
+        }
     }
 
     fun getRawSystemData(): String {
         val sb = StringBuilder()
 
-        sb.append("=== SYSTEM PROPERTIES (GETPROP) ===\n")
+        sb.append("=== APP LOGS (ВНУТРЕННИЕ ОШИБКИ) ===\n")
+        if (AppLog.messages.isEmpty()) sb.append("Ошибок пока нет.\n")
+        else sb.append(AppLog.messages.toString())
+
+        sb.append("\n=== SYSTEM PROPERTIES (GETPROP) ===\n")
         try {
             val process = Runtime.getRuntime().exec("getprop")
             val reader = BufferedReader(InputStreamReader(process.inputStream))
             var line: String?
-
             while (reader.readLine().also { line = it } != null) {
                 val lower = line!!.lowercase()
                 if (lower.contains("wifi") || lower.contains("wlan") || lower.contains("chip") || lower.contains("board.platform") || lower.contains("hardware")) {
@@ -194,20 +217,15 @@ class WifiAnalyzer(private val context: Context) {
             "/sys/class/net/wlan0/device/uevent",
             "/sys/class/net/wlan0/carrier"
         )
-
         for (path in sysfsPaths) {
             try {
                 val file = File(path)
-                if (file.exists()) {
-                    sb.append("$path: ${file.readText().trim()}\n")
-                } else {
-                    sb.append("$path: [Нет файла / Permission Denied]\n")
-                }
+                if (file.exists()) sb.append("$path: ${file.readText().trim()}\n")
+                else sb.append("$path: [Нет файла / Permission Denied]\n")
             } catch (e: Exception) {
                 sb.append("$path: [Ошибка доступа]\n")
             }
         }
-
         return sb.toString()
     }
 }
