@@ -4,6 +4,9 @@ import android.content.Context
 import android.net.wifi.ScanResult
 import android.net.wifi.WifiManager
 import android.os.Build
+import java.io.BufferedReader
+import java.io.File
+import java.io.InputStreamReader
 import java.net.InetAddress
 
 class WifiAnalyzer(private val context: Context) {
@@ -100,12 +103,10 @@ class WifiAnalyzer(private val context: Context) {
         return results.sortedByDescending { it.rssi }
     }
 
-    // OUI Lookup - Определение вендора по MAC адресу
     private fun getVendorFromMac(mac: String): String {
         val cleanMac = mac.uppercase().replace(":", "")
         if (cleanMac.length < 6) return "Неизвестно"
 
-        // Проверка на рандомизированный MAC (Local bit 1)
         val secondChar = cleanMac[1]
         if (secondChar == '2' || secondChar == '6' || secondChar == 'A' || secondChar == 'E') {
             return "Случайный MAC (Hotspot/Рандом)"
@@ -128,11 +129,10 @@ class WifiAnalyzer(private val context: Context) {
         }
     }
 
-    // Расчет Quality Score от 0 до 100%
     private fun calculateQualityScore(rssi: Int, linkSpeed: Int): Int {
         var score = 100
         if (rssi < -50) {
-            score -= (rssi + 50) * -2 // Потеря баллов при падении сигнала
+            score -= (rssi + 50) * -2
         }
         if (linkSpeed in 1..99) score -= 10
         if (linkSpeed in 1..29) score -= 10
@@ -165,5 +165,49 @@ class WifiAnalyzer(private val context: Context) {
             val reachable = InetAddress.getByName(host).isReachable(1500)
             if (reachable) System.currentTimeMillis() - startTime else -1L
         } catch (e: Exception) { -1L }
+    }
+
+    fun getRawSystemData(): String {
+        val sb = StringBuilder()
+
+        sb.append("=== SYSTEM PROPERTIES (GETPROP) ===\n")
+        try {
+            val process = Runtime.getRuntime().exec("getprop")
+            val reader = BufferedReader(InputStreamReader(process.inputStream))
+            var line: String?
+
+            while (reader.readLine().also { line = it } != null) {
+                val lower = line!!.lowercase()
+                if (lower.contains("wifi") || lower.contains("wlan") || lower.contains("chip") || lower.contains("board.platform") || lower.contains("hardware")) {
+                    sb.append(line).append("\n")
+                }
+            }
+            reader.close()
+        } catch (e: Exception) {
+            sb.append("Ошибка чтения getprop: ${e.message}\n")
+        }
+
+        sb.append("\n=== SYSFS WLAN0 (HW DIRECTORY) ===\n")
+        val sysfsPaths = listOf(
+            "/sys/class/net/wlan0/address",
+            "/sys/class/net/wlan0/operstate",
+            "/sys/class/net/wlan0/device/uevent",
+            "/sys/class/net/wlan0/carrier"
+        )
+
+        for (path in sysfsPaths) {
+            try {
+                val file = File(path)
+                if (file.exists()) {
+                    sb.append("$path: ${file.readText().trim()}\n")
+                } else {
+                    sb.append("$path: [Нет файла / Permission Denied]\n")
+                }
+            } catch (e: Exception) {
+                sb.append("$path: [Ошибка доступа]\n")
+            }
+        }
+
+        return sb.toString()
     }
 }

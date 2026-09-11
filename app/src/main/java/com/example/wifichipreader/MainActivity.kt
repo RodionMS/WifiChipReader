@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.view.View
@@ -14,9 +15,11 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import java.io.File
 
 class MainActivity : AppCompatActivity() {
 
@@ -24,10 +27,16 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var tabHardware: Button
     private lateinit var tabScanner: Button
+    private lateinit var tabDebug: Button
+
     private lateinit var layoutHardware: ScrollView
     private lateinit var layoutScanner: ScrollView
+    private lateinit var layoutDebug: ScrollView
+
     private lateinit var containerNetworks: LinearLayout
     private lateinit var btnAnalyze: Button
+    private lateinit var btnExportReport: Button
+    private lateinit var tvDebugConsole: TextView
 
     private val scanHandler = Handler(Looper.getMainLooper())
     private val scanRunnable = object : Runnable {
@@ -46,57 +55,73 @@ class MainActivity : AppCompatActivity() {
         initViews()
         requestPermissionsIfNeeded()
         setupTabs()
-        setupTvFocusAnimations() // Инициализация логики для пульта Android TV
+        setupTvFocusAnimations()
 
         btnAnalyze.setOnClickListener { runHardwareScan() }
+        btnExportReport.setOnClickListener { exportDebugReport() }
+
         runHardwareScan()
     }
 
     private fun initViews() {
         tabHardware = findViewById(R.id.tabHardware)
         tabScanner = findViewById(R.id.tabScanner)
+        tabDebug = findViewById(R.id.tabDebug)
+
         layoutHardware = findViewById(R.id.layoutHardware)
         layoutScanner = findViewById(R.id.layoutScanner)
+        layoutDebug = findViewById(R.id.layoutDebug)
+
         containerNetworks = findViewById(R.id.containerNetworks)
         btnAnalyze = findViewById(R.id.btnAnalyze)
+        btnExportReport = findViewById(R.id.btnExportReport)
+        tvDebugConsole = findViewById(R.id.tvDebugConsole)
     }
 
-    // Анимация фокуса для пульта Android TV (Увеличение при наведении)
     private fun setupTvFocusAnimations() {
-        val focusChangeListener = View.OnFocusChangeListener { view, hasFocus ->
+        val focusListener = View.OnFocusChangeListener { view, hasFocus ->
             if (hasFocus) {
-                // Кнопка в фокусе - плавно увеличиваем
                 view.animate().scaleX(1.05f).scaleY(1.05f).translationZ(10f).setDuration(150).start()
             } else {
-                // Фокус ушел - возвращаем исходный размер
                 view.animate().scaleX(1.0f).scaleY(1.0f).translationZ(0f).setDuration(150).start()
             }
         }
 
-        tabHardware.onFocusChangeListener = focusChangeListener
-        tabScanner.onFocusChangeListener = focusChangeListener
-        btnAnalyze.onFocusChangeListener = focusChangeListener
+        tabHardware.onFocusChangeListener = focusListener
+        tabScanner.onFocusChangeListener = focusListener
+        tabDebug.onFocusChangeListener = focusListener
+        btnAnalyze.onFocusChangeListener = focusListener
+        btnExportReport.onFocusChangeListener = focusListener
     }
 
     private fun setupTabs() {
-        tabHardware.setOnClickListener {
-            layoutHardware.visibility = View.VISIBLE
-            layoutScanner.visibility = View.GONE
-            tabHardware.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#4CAF50"))
-            tabHardware.setTextColor(Color.BLACK)
-            tabScanner.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#333333"))
-            tabScanner.setTextColor(Color.WHITE)
-            stopAutoScan()
-        }
+        tabHardware.setOnClickListener { switchTab(0) }
+        tabScanner.setOnClickListener { switchTab(1) }
+        tabDebug.setOnClickListener { switchTab(2) }
+    }
 
-        tabScanner.setOnClickListener {
-            layoutHardware.visibility = View.GONE
-            layoutScanner.visibility = View.VISIBLE
-            tabScanner.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#03A9F4"))
-            tabScanner.setTextColor(Color.BLACK)
-            tabHardware.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#333333"))
-            tabHardware.setTextColor(Color.WHITE)
-            startAutoScan()
+    private fun switchTab(index: Int) {
+        layoutHardware.visibility = if (index == 0) View.VISIBLE else View.GONE
+        layoutScanner.visibility = if (index == 1) View.VISIBLE else View.GONE
+        layoutDebug.visibility = if (index == 2) View.VISIBLE else View.GONE
+
+        tabHardware.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor(if (index == 0) "#4CAF50" else "#333333"))
+        tabHardware.setTextColor(if (index == 0) Color.BLACK else Color.WHITE)
+
+        tabScanner.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor(if (index == 1) "#03A9F4" else "#333333"))
+        tabScanner.setTextColor(if (index == 1) Color.BLACK else Color.WHITE)
+
+        tabDebug.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor(if (index == 2) "#673AB7" else "#333333"))
+        tabDebug.setTextColor(if (index == 2) Color.WHITE else Color.WHITE)
+
+        if (index == 1) startAutoScan() else stopAutoScan()
+
+        if (index == 2) {
+            tvDebugConsole.text = "Сбор логов системы..."
+            Thread {
+                val rawData = analyzer.getRawSystemData()
+                runOnUiThread { tvDebugConsole.text = rawData }
+            }.start()
         }
     }
 
@@ -236,6 +261,23 @@ class MainActivity : AppCompatActivity() {
             card.addView(macAndSec)
             card.addView(freqAndSignal)
             containerNetworks.addView(card)
+        }
+    }
+
+    private fun exportDebugReport() {
+        val logData = tvDebugConsole.text.toString()
+        val fileName = "WiFi_Debug_${System.currentTimeMillis()}.txt"
+
+        try {
+            val dir = getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)
+            if (dir != null && !dir.exists()) dir.mkdirs()
+
+            val file = File(dir, fileName)
+            file.writeText(logData)
+
+            Toast.makeText(this, "Отчет сохранен:\n${file.absolutePath}", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Ошибка экспорта: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
