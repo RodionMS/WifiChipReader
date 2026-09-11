@@ -7,6 +7,12 @@ import android.os.Build
 
 class WifiAnalyzer(private val context: Context) {
 
+    data class HardwareReport(
+        val is5GSupported: Boolean,
+        val is6GSupported: Boolean,
+        val currentStandard: String
+    )
+
     data class NetworkInfo(
         val ssid: String,
         val bssid: String,
@@ -16,11 +22,26 @@ class WifiAnalyzer(private val context: Context) {
         val security: String
     )
 
-    fun getHardwareCapabilities(): Map<String, Boolean> {
+    fun getHardwareReport(): HardwareReport {
         val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+
         val is5G = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) wifiManager.is5GHzBandSupported else true
         val is6G = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) wifiManager.is6GHzBandSupported else false
-        return mapOf("5G" to is5G, "6G" to is6G)
+
+        val wifiInfo = wifiManager.connectionInfo
+        val freq = wifiInfo.frequency
+        val hasConnection = freq > 0 && wifiInfo.ssid != null && wifiInfo.ssid != "<unknown ssid>"
+
+        var currentStandard = ""
+        if (hasConnection && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            currentStandard = when (wifiInfo.wifiStandard) {
+                ScanResult.WIFI_STANDARD_11AX -> "WiFi 6"
+                ScanResult.WIFI_STANDARD_11BE -> "WiFi 7"
+                else -> ""
+            }
+        }
+
+        return HardwareReport(is5G, is6G, currentStandard)
     }
 
     fun scanEther(): List<NetworkInfo> {
@@ -30,9 +51,7 @@ class WifiAnalyzer(private val context: Context) {
         try {
             val scanResults = wifiManager.scanResults
             for (scan in scanResults) {
-                // Исключаем пустые скрытые сети
                 val ssid = if (scan.SSID.isNullOrEmpty()) "[Скрытая сеть]" else scan.SSID
-
                 results.add(
                     NetworkInfo(
                         ssid = ssid,
@@ -45,20 +64,18 @@ class WifiAnalyzer(private val context: Context) {
                 )
             }
         } catch (e: Exception) {
-            // Если нет прав или отключен WiFi
+            // Игнорируем ошибки, если сканирование недоступно
         }
 
-        // Сортируем по мощности сигнала (от сильного к слабому)
         return results.sortedByDescending { it.rssi }
     }
 
-    // Перевод частоты в номер канала
     private fun calculateChannel(freq: Int): Int {
         return when {
             freq == 2484 -> 14
             freq in 2412..2472 -> (freq - 2407) / 5
             freq in 5170..5825 -> (freq - 5000) / 5
-            freq in 5925..7125 -> (freq - 5950) / 5 // Для 6GHz (WiFi 6E)
+            freq in 5925..7125 -> (freq - 5950) / 5
             else -> 0
         }
     }

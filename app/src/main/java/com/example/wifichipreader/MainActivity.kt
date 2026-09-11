@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
@@ -19,14 +21,23 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var analyzer: WifiAnalyzer
 
-    // Вкладки
+    // UI Вкладок
     private lateinit var tabHardware: Button
     private lateinit var tabScanner: Button
     private lateinit var layoutHardware: ScrollView
     private lateinit var layoutScanner: ScrollView
-
-    // Контейнер для сетей
     private lateinit var containerNetworks: LinearLayout
+
+    // Таймер для автообновления
+    private val scanHandler = Handler(Looper.getMainLooper())
+    private val scanRunnable = object : Runnable {
+        override fun run() {
+            runEtherScan()
+            scanHandler.postDelayed(this, 3000) // Повтор каждые 3 секунды
+        }
+    }
+
+    private var isScannerActive = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -38,8 +49,6 @@ class MainActivity : AppCompatActivity() {
         setupTabs()
 
         findViewById<Button>(R.id.btnAnalyze).setOnClickListener { runHardwareScan() }
-        findViewById<Button>(R.id.btnScanEther).setOnClickListener { runEtherScan() }
-
         runHardwareScan()
     }
 
@@ -59,6 +68,8 @@ class MainActivity : AppCompatActivity() {
             tabHardware.setTextColor(Color.BLACK)
             tabScanner.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#333333"))
             tabScanner.setTextColor(Color.WHITE)
+
+            stopAutoScan() // Выключаем сканер эфира для экономии батареи
         }
 
         tabScanner.setOnClickListener {
@@ -68,42 +79,90 @@ class MainActivity : AppCompatActivity() {
             tabScanner.setTextColor(Color.BLACK)
             tabHardware.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#333333"))
             tabHardware.setTextColor(Color.WHITE)
-            runEtherScan() // Автоматически сканируем при открытии
+
+            startAutoScan() // Запускаем автообновление
         }
     }
 
     private fun runHardwareScan() {
-        val caps = analyzer.getHardwareCapabilities()
+        val report = analyzer.getHardwareReport()
         val prefs = getSharedPreferences("WifiPrefs", Context.MODE_PRIVATE)
 
-        val is5G = caps["5G"] ?: false
-        val is6G = caps["6G"] ?: false
-
+        // Аппаратные диапазоны
         findViewById<TextView>(R.id.tvBand5G).apply {
-            text = "• 5 GHz Диапазон: " + if (is5G) "Поддерживается" else "Нет"
-            setTextColor(Color.parseColor(if (is5G) "#4CAF50" else "#F44336"))
+            text = "• 5 GHz Диапазон: " + if (report.is5GSupported) "Поддерживается" else "Нет"
+            setTextColor(Color.parseColor(if (report.is5GSupported) "#4CAF50" else "#F44336"))
         }
 
         findViewById<TextView>(R.id.tvBand6G).apply {
-            text = "• 6 GHz Диапазон: " + if (is6G) "Поддерживается" else "Нет"
-            setTextColor(Color.parseColor(if (is6G) "#4CAF50" else "#888888"))
+            text = "• 6 GHz Диапазон: " + if (report.is6GSupported) "Поддерживается" else "Нет"
+            setTextColor(Color.parseColor(if (report.is6GSupported) "#4CAF50" else "#888888"))
         }
 
-        val hasWifi5 = is5G || prefs.getBoolean("has_wifi5", false)
-        findViewById<TextView>(R.id.tvWifi4).text = "✓ WiFi 4 (802.11n) — Поддерживается"
-        findViewById<TextView>(R.id.tvWifi4).setTextColor(Color.parseColor("#4CAF50"))
+        // Логика памяти для Wi-Fi 5, 6, 7
+        var hasWifi5 = report.is5GSupported || prefs.getBoolean("has_wifi5", false)
+        var hasWifi6 = report.currentStandard == "WiFi 6" || report.is6GSupported || prefs.getBoolean("has_wifi6", false)
+        var hasWifi7 = report.currentStandard == "WiFi 7" || prefs.getBoolean("has_wifi7", false)
 
-        findViewById<TextView>(R.id.tvWifi5).text = if (hasWifi5) "✓ WiFi 5 (802.11ac) — Поддерживается" else "✕ WiFi 5 — Не обнаружено"
-        findViewById<TextView>(R.id.tvWifi5).setTextColor(Color.parseColor(if (hasWifi5) "#4CAF50" else "#888888"))
+        prefs.edit().apply {
+            putBoolean("has_wifi5", hasWifi5)
+            putBoolean("has_wifi6", hasWifi6)
+            putBoolean("has_wifi7", hasWifi7)
+            apply()
+        }
+
+        // Отрисовка всех 7 поколений
+        val colorGreen = Color.parseColor("#4CAF50")
+        val colorGray = Color.parseColor("#888888")
+
+        // Стандарты 1 (b) и 3 (g) поддерживают все современные устройства
+        findViewById<TextView>(R.id.tvWifi1).apply { text = "✓ WiFi 1 (802.11b) — Поддерживается"; setTextColor(colorGreen) }
+        findViewById<TextView>(R.id.tvWifi3).apply { text = "✓ WiFi 3 (802.11g) — Поддерживается"; setTextColor(colorGreen) }
+
+        // Стандарт 2 (a) работает только на 5GHz
+        findViewById<TextView>(R.id.tvWifi2).apply {
+            text = if (report.is5GSupported) "✓ WiFi 2 (802.11a) — Поддерживается" else "✕ WiFi 2 (802.11a) — Нет 5GHz"
+            setTextColor(if (report.is5GSupported) colorGreen else colorGray)
+        }
+
+        findViewById<TextView>(R.id.tvWifi4).apply { text = "✓ WiFi 4 (802.11n) — Поддерживается"; setTextColor(colorGreen) }
+
+        findViewById<TextView>(R.id.tvWifi5).apply {
+            text = if (hasWifi5) "✓ WiFi 5 (802.11ac) — Поддерживается" else "✕ WiFi 5 — Не обнаружено"
+            setTextColor(if (hasWifi5) colorGreen else colorGray)
+        }
+
+        findViewById<TextView>(R.id.tvWifi6).apply {
+            text = if (hasWifi6) "✓ WiFi 6 (802.11ax) — Подтверждено" else "• WiFi 6 (802.11ax) — Не зафиксировано"
+            setTextColor(if (hasWifi6) colorGreen else colorGray)
+        }
+
+        findViewById<TextView>(R.id.tvWifi7).apply {
+            text = if (hasWifi7) "✓ WiFi 7 (802.11be) — Подтверждено" else "✕ WiFi 7 (802.11be) — Не обнаружено"
+            setTextColor(if (hasWifi7) colorGreen else colorGray)
+        }
+    }
+
+    // Управление автосканером
+    private fun startAutoScan() {
+        isScannerActive = true
+        runEtherScan() // Моментальный скан при открытии
+        scanHandler.removeCallbacks(scanRunnable)
+        scanHandler.postDelayed(scanRunnable, 3000)
+    }
+
+    private fun stopAutoScan() {
+        isScannerActive = false
+        scanHandler.removeCallbacks(scanRunnable)
     }
 
     private fun runEtherScan() {
-        containerNetworks.removeAllViews() // Очищаем старый список
         val networks = analyzer.scanEther()
+        containerNetworks.removeAllViews()
 
         if (networks.isEmpty()) {
             val emptyTv = TextView(this).apply {
-                text = "Сети не найдены. Убедитесь, что включена геолокация (GPS) и Wi-Fi."
+                text = "Идет сканирование... Убедитесь, что включена геолокация (GPS)."
                 setTextColor(Color.parseColor("#AAAAAA"))
                 textSize = 14f
             }
@@ -111,7 +170,6 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // Динамически рисуем карточки для каждой сети
         for (net in networks) {
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
@@ -146,8 +204,21 @@ class MainActivity : AppCompatActivity() {
             card.addView(title)
             card.addView(macAndSec)
             card.addView(freqAndSignal)
-
             containerNetworks.addView(card)
+        }
+    }
+
+    // Останавливаем таймер при сворачивании приложения
+    override fun onPause() {
+        super.onPause()
+        stopAutoScan()
+    }
+
+    // Запускаем таймер при возврате в приложение (если открыта вкладка сканера)
+    override fun onResume() {
+        super.onResume()
+        if (isScannerActive) {
+            startAutoScan()
         }
     }
 
