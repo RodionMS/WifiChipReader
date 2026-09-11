@@ -1,9 +1,12 @@
 package com.example.wifichipreader
 
+import android.app.ActivityManager
 import android.content.Context
 import android.net.wifi.ScanResult
 import android.net.wifi.WifiManager
 import android.os.Build
+import android.os.Environment
+import android.os.StatFs
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
@@ -50,7 +53,6 @@ class WifiAnalyzer(private val context: Context) {
         val security: String
     )
 
-    // Расширенная модель для обновления всего блока в реальном времени
     data class LiveStats(
         val hasConnection: Boolean,
         val ssid: String,
@@ -60,6 +62,31 @@ class WifiAnalyzer(private val context: Context) {
         val linkSpeed: Int,
         val qualityScore: Int
     )
+
+    // НОВАЯ МОДЕЛЬ ДЛЯ ПАМЯТИ
+    data class MemoryReport(
+        val ramTotalGb: Double,
+        val ramAvailGb: Double,
+        val romTotalGb: Double,
+        val romAvailGb: Double
+    )
+
+    // НОВАЯ ФУНКЦИЯ ДЛЯ ПОЛУЧЕНИЯ ОЗУ/ПЗУ
+    fun getMemoryReport(): MemoryReport {
+        // ОЗУ (RAM)
+        val actManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val memInfo = ActivityManager.MemoryInfo()
+        actManager.getMemoryInfo(memInfo)
+        val ramTotal = memInfo.totalMem.toDouble() / (1024 * 1024 * 1024)
+        val ramAvail = memInfo.availMem.toDouble() / (1024 * 1024 * 1024)
+
+        // ПЗУ (ROM / Внутреннее хранилище)
+        val statFs = StatFs(Environment.getDataDirectory().path)
+        val romTotal = statFs.totalBytes.toDouble() / (1024 * 1024 * 1024)
+        val romAvail = statFs.availableBytes.toDouble() / (1024 * 1024 * 1024)
+
+        return MemoryReport(ramTotal, ramAvail, romTotal, romAvail)
+    }
 
     fun getHardwareReport(): HardwareReport {
         val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
@@ -104,7 +131,6 @@ class WifiAnalyzer(private val context: Context) {
         )
     }
 
-    // Мгновенный сбор всех данных для графика и текстового блока (без пинга)
     fun getLiveStats(): LiveStats {
         val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
         val wifiInfo = wifiManager.connectionInfo

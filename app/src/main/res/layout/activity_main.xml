@@ -67,6 +67,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
+        <!-- ВКЛАДКА 1: ТТХ Чипа -->
         <ScrollView
             android:id="@+id/layoutHardware"
             android:layout_width="match_parent"
@@ -79,16 +80,54 @@
                 android:orientation="vertical"
                 android:clipChildren="false">
 
-                <Button
-                    android:id="@+id/btnAnalyze"
+                <!-- Две кнопки рядом: Скан и QR -->
+                <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="60dp"
-                    android:text="Просканировать систему"
-                    android:textColor="#000000"
-                    android:backgroundTint="#4CAF50"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="16dp"
+                    android:clipChildren="false">
+
+                    <Button
+                        android:id="@+id/btnAnalyze"
+                        android:layout_width="0dp"
+                        android:layout_weight="1.5"
+                        android:layout_height="60dp"
+                        android:text="Просканировать"
+                        android:textColor="#000000"
+                        android:backgroundTint="#4CAF50"
+                        android:focusable="true"
+                        android:stateListAnimator="@null"
+                        android:layout_marginEnd="8dp" />
+
+                    <Button
+                        android:id="@+id/btnShowQR"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="60dp"
+                        android:text="QR ТТХ"
+                        android:textColor="#FFFFFF"
+                        android:backgroundTint="#2196F3"
+                        android:focusable="true"
+                        android:stateListAnimator="@null" />
+                </LinearLayout>
+
+                <!-- НОВЫЙ БЛОК: СИСТЕМА И ПАМЯТЬ -->
+                <LinearLayout
+                    android:id="@+id/blockSystem"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="#1E1E1E"
+                    android:padding="16dp"
+                    android:layout_marginBottom="16dp"
                     android:focusable="true"
-                    android:stateListAnimator="@null"
-                    android:layout_marginBottom="16dp" />
+                    android:clickable="true">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="СИСТЕМА И ПАМЯТЬ (INFO ⓘ)" android:textColor="#888888" android:textSize="12sp" android:textStyle="bold" android:layout_marginBottom="10dp" />
+                    <TextView android:id="@+id/tvDeviceModel" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#E0E0E0" android:layout_marginBottom="6dp" />
+                    <TextView android:id="@+id/tvRam" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#E0E0E0" android:layout_marginBottom="6dp" />
+                    <TextView android:id="@+id/tvRom" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#E0E0E0" />
+                </LinearLayout>
 
                 <LinearLayout
                     android:id="@+id/blockHardware"
@@ -150,7 +189,6 @@
                     <TextView android:id="@+id/tvQualityScore" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Качество связи: Ожидание..." android:textColor="#E0E0E0" android:textStyle="bold" android:layout_marginBottom="10dp" />
                     <TextView android:id="@+id/tvConnectionDetails" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#AAAAAA" android:lineSpacingExtra="5dp" />
 
-                    <!-- НОВЫЙ КОМПОНЕНТ: Живой график сигнала -->
                     <com.example.wifichipreader.SignalGraphView
                         android:id="@+id/graphSignal"
                         android:layout_width="match_parent"
@@ -162,6 +200,7 @@
             </LinearLayout>
         </ScrollView>
 
+        <!-- ВКЛАДКА 2: Сканер эфира -->
         <ScrollView
             android:id="@+id/layoutScanner"
             android:layout_width="match_parent"
@@ -194,6 +233,7 @@
             </LinearLayout>
         </ScrollView>
 
+        <!-- ВКЛАДКА 3: DEBUG -->
         <ScrollView
             android:id="@+id/layoutDebug"
             android:layout_width="match_parent"
@@ -211,7 +251,7 @@
                     android:id="@+id/btnExportReport"
                     android:layout_width="match_parent"
                     android:layout_height="60dp"
-                    android:text="Экспорт в TXT"
+                    android:text="Экспорт полного отчета"
                     android:textColor="#FFFFFF"
                     android:backgroundTint="#673AB7"
                     android:focusable="true"

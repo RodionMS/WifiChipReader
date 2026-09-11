@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.location.LocationManager
 import android.os.Build
@@ -14,6 +15,7 @@ import android.os.Looper
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
@@ -23,7 +25,12 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.qrcode.QRCodeWriter
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
@@ -39,17 +46,26 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var containerNetworks: LinearLayout
     private lateinit var btnAnalyze: Button
+    private lateinit var btnShowQR: Button
     private lateinit var btnExportReport: Button
     private lateinit var tvDebugConsole: TextView
 
+    private lateinit var blockSystem: LinearLayout
     private lateinit var blockHardware: LinearLayout
     private lateinit var blockStandards: LinearLayout
     private lateinit var blockConnection: LinearLayout
     private lateinit var graphSignal: SignalGraphView
     private lateinit var tvConnectionDetails: TextView
 
+    private lateinit var tvDeviceModel: TextView
+    private lateinit var tvRam: TextView
+    private lateinit var tvRom: TextView
+
     private var currentTabIndex = 0
     private var lastPingMs = -1L
+
+    private var lastReport: WifiAnalyzer.HardwareReport? = null
+    private var lastMemReport: WifiAnalyzer.MemoryReport? = null
 
     private val scanHandler = Handler(Looper.getMainLooper())
     private val scanRunnable = object : Runnable {
@@ -106,6 +122,7 @@ class MainActivity : AppCompatActivity() {
 
         btnAnalyze.setOnClickListener { runHardwareScan() }
         btnExportReport.setOnClickListener { exportDebugReport() }
+        btnShowQR.setOnClickListener { showQrDialog() }
 
         runHardwareScan()
     }
@@ -121,31 +138,41 @@ class MainActivity : AppCompatActivity() {
 
         containerNetworks = findViewById(R.id.containerNetworks)
         btnAnalyze = findViewById(R.id.btnAnalyze)
+        btnShowQR = findViewById(R.id.btnShowQR)
         btnExportReport = findViewById(R.id.btnExportReport)
         tvDebugConsole = findViewById(R.id.tvDebugConsole)
 
+        blockSystem = findViewById(R.id.blockSystem)
         blockHardware = findViewById(R.id.blockHardware)
         blockStandards = findViewById(R.id.blockStandards)
         blockConnection = findViewById(R.id.blockConnection)
         graphSignal = findViewById(R.id.graphSignal)
         tvConnectionDetails = findViewById(R.id.tvConnectionDetails)
+
+        tvDeviceModel = findViewById(R.id.tvDeviceModel)
+        tvRam = findViewById(R.id.tvRam)
+        tvRom = findViewById(R.id.tvRom)
     }
 
     private fun setupTooltips() {
+        blockSystem.setOnClickListener {
+            showInfoDialog(
+                "Система и Память",
+                "• ОЗУ (RAM): Оперативная память устройства. Влияет на многозадачность.\n\n• ПЗУ (ROM): Внутренний накопитель для прошивки и приложений."
+            )
+        }
         blockHardware.setOnClickListener {
             showInfoDialog(
                 "Аппаратные диапазоны",
                 "• 5 GHz: Высокая скорость, но малый радиус (сигнал плохо проходит сквозь стены).\n\n• 6 GHz: Свободный от помех диапазон (Wi-Fi 6E и Wi-Fi 7)."
             )
         }
-
         blockStandards.setOnClickListener {
             showInfoDialog(
                 "Стандарты связи",
                 "• Wi-Fi 4 (n): Базовый стандарт.\n• Wi-Fi 5 (ac): Отлично для 4K.\n• Wi-Fi 6 (ax): Не боится загруженного эфира.\n• Wi-Fi 7 (be): Каналы 320 МГц, сверхвысокие скорости."
             )
         }
-
         blockConnection.setOnClickListener {
             showInfoDialog(
                 "Соединение",
@@ -162,9 +189,60 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    // Идеальная анимация фокуса для ТВ (Через Foreground, без поломки цветов)
+    private fun showQrDialog() {
+        val report = lastReport
+        val mem = lastMemReport
+        if (report == null || mem == null) {
+            Toast.makeText(this, "Сначала просканируйте систему", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val prefs = getSharedPreferences("WifiPrefs", Context.MODE_PRIVATE)
+        val hasWifi5 = report.is5GSupported || prefs.getBoolean("has_wifi5", false)
+        val hasWifi6 = report.currentStandard == "WiFi 6" || report.is6GSupported || prefs.getBoolean("has_wifi6", false)
+
+        val json = """
+            {
+              "Device": "${Build.MANUFACTURER} ${Build.MODEL}",
+              "Android": "${Build.VERSION.RELEASE}",
+              "RAM_GB": ${String.format(Locale.US, "%.1f", mem.ramTotalGb)},
+              "ROM_GB": ${String.format(Locale.US, "%.1f", mem.romTotalGb)},
+              "is5GHz": ${report.is5GSupported},
+              "is6GHz": ${report.is6GSupported},
+              "WiFi5_ac": $hasWifi5,
+              "WiFi6_ax": $hasWifi6,
+              "Standard": "${report.currentStandard}"
+            }
+        """.trimIndent()
+
+        try {
+            val size = 600
+            val bitMatrix = QRCodeWriter().encode(json, BarcodeFormat.QR_CODE, size, size)
+            val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.RGB_565)
+            for (x in 0 until size) {
+                for (y in 0 until size) {
+                    bitmap.setPixel(x, y, if (bitMatrix.get(x, y)) Color.BLACK else Color.WHITE)
+                }
+            }
+
+            val imageView = ImageView(this)
+            imageView.setImageBitmap(bitmap)
+            imageView.setPadding(32, 32, 32, 32)
+            imageView.setBackgroundColor(Color.WHITE)
+
+            AlertDialog.Builder(this)
+                .setTitle("QR-код оборудования")
+                .setMessage("Отсканируйте камерой смартфона, чтобы сохранить отчет.")
+                .setView(imageView)
+                .setPositiveButton("Закрыть") { dialog, _ -> dialog.dismiss() }
+                .show()
+
+        } catch (e: Exception) {
+            Toast.makeText(this, "Ошибка генерации QR", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun setupTvFocusAnimations() {
-        // Анимация для интерактивных кнопок (Увеличиваются + Белая рамка)
         val buttonFocusListener = View.OnFocusChangeListener { view, hasFocus ->
             if (hasFocus) {
                 val border = android.graphics.drawable.GradientDrawable()
@@ -179,7 +257,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Анимация для информационных блоков (Только рамка, без увеличения)
         val blockFocusListener = View.OnFocusChangeListener { view, hasFocus ->
             if (hasFocus) {
                 val border = android.graphics.drawable.GradientDrawable()
@@ -196,8 +273,10 @@ class MainActivity : AppCompatActivity() {
         tabScanner.onFocusChangeListener = buttonFocusListener
         tabDebug.onFocusChangeListener = buttonFocusListener
         btnAnalyze.onFocusChangeListener = buttonFocusListener
+        btnShowQR.onFocusChangeListener = buttonFocusListener
         btnExportReport.onFocusChangeListener = buttonFocusListener
 
+        blockSystem.onFocusChangeListener = blockFocusListener
         blockHardware.onFocusChangeListener = blockFocusListener
         blockStandards.onFocusChangeListener = blockFocusListener
         blockConnection.onFocusChangeListener = blockFocusListener
@@ -210,7 +289,6 @@ class MainActivity : AppCompatActivity() {
         switchTab(0)
     }
 
-    // Родная перекраска вкладок без костылей
     private fun switchTab(index: Int) {
         currentTabIndex = index
 
@@ -252,14 +330,22 @@ class MainActivity : AppCompatActivity() {
 
     private fun runHardwareScan() {
         btnAnalyze.isEnabled = false
-        btnAnalyze.text = "Сканирование системы (Пинг...)"
+        btnAnalyze.text = "Пинг..."
 
         Thread {
             val report = analyzer.getHardwareReport()
+            val memReport = analyzer.getMemoryReport() // Получаем память
             val prefs = getSharedPreferences("WifiPrefs", Context.MODE_PRIVATE)
 
             runOnUiThread {
                 lastPingMs = report.pingMs
+                lastReport = report
+                lastMemReport = memReport
+
+                // Обновление блока СИСТЕМА
+                tvDeviceModel.text = "• Устройство: ${Build.MANUFACTURER.uppercase()} ${Build.MODEL}"
+                tvRam.text = "• ОЗУ (RAM): ${String.format(Locale.US, "%.1f", memReport.ramTotalGb)} GB (Свободно: ${String.format(Locale.US, "%.1f", memReport.ramAvailGb)} GB)"
+                tvRom.text = "• ПЗУ (ROM): ${String.format(Locale.US, "%.1f", memReport.romTotalGb)} GB (Свободно: ${String.format(Locale.US, "%.1f", memReport.romAvailGb)} GB)"
 
                 findViewById<TextView>(R.id.tvBand5G).apply {
                     text = "• 5 GHz Диапазон: " + if (report.is5GSupported) "Поддерживается" else "Нет"
@@ -305,7 +391,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 btnAnalyze.isEnabled = true
-                btnAnalyze.text = "Просканировать систему"
+                btnAnalyze.text = "Просканировать"
             }
         }.start()
     }
@@ -375,16 +461,41 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // НОВЫЙ "АДЕКВАТНЫЙ" ЭКСПОРТ
     private fun exportDebugReport() {
-        val logData = tvDebugConsole.text.toString()
-        val fileName = "WiFi_Debug_${System.currentTimeMillis()}.txt"
+        val report = lastReport
+        val mem = lastMemReport
+
+        val header = StringBuilder()
+        header.append("=== WIFI HARDWARE PRO: ОТЧЕТ ===\n")
+        header.append("Дата: ${SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.US).format(Date())}\n")
+        header.append("Устройство: ${Build.MANUFACTURER.uppercase()} ${Build.MODEL}\n")
+        header.append("Версия Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})\n\n")
+
+        if (mem != null) {
+            header.append("--- ПАМЯТЬ ---\n")
+            header.append("ОЗУ (RAM): ${String.format(Locale.US, "%.1f", mem.ramTotalGb)} GB (Свободно: ${String.format(Locale.US, "%.1f", mem.ramAvailGb)} GB)\n")
+            header.append("ПЗУ (ROM): ${String.format(Locale.US, "%.1f", mem.romTotalGb)} GB (Свободно: ${String.format(Locale.US, "%.1f", mem.romAvailGb)} GB)\n\n")
+        }
+
+        if (report != null) {
+            header.append("--- WI-FI ХАРАКТЕРИСТИКИ ---\n")
+            header.append("5 GHz: ${if (report.is5GSupported) "Поддерживается" else "Нет"}\n")
+            header.append("6 GHz: ${if (report.is6GSupported) "Поддерживается" else "Нет"}\n")
+            header.append("Текущий стандарт: ${if (report.currentStandard.isEmpty()) "Не определен" else report.currentStandard}\n\n")
+        }
+
+        val rawData = tvDebugConsole.text.toString()
+        val fullReport = header.toString() + rawData
+
+        val fileName = "WiFi_Hardware_Report_${System.currentTimeMillis()}.txt"
 
         try {
             val dir = getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)
             if (dir != null && !dir.exists()) dir.mkdirs()
 
             val file = File(dir, fileName)
-            file.writeText(logData)
+            file.writeText(fullReport)
 
             Toast.makeText(this, "Отчет сохранен:\n${file.absolutePath}", Toast.LENGTH_LONG).show()
         } catch (e: Exception) {
