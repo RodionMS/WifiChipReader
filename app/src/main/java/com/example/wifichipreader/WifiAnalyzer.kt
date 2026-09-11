@@ -4,18 +4,28 @@ import android.content.Context
 import android.net.wifi.ScanResult
 import android.net.wifi.WifiManager
 import android.os.Build
+import java.net.InetAddress
 
 class WifiAnalyzer(private val context: Context) {
 
     data class HardwareReport(
         val is5GSupported: Boolean,
         val is6GSupported: Boolean,
-        val currentStandard: String
+        val currentStandard: String,
+        val hasConnection: Boolean,
+        val ssid: String,
+        val frequency: Int,
+        val linkSpeed: Int,
+        val rssi: Int,
+        val securityType: String,
+        val pingMs: Long,
+        val qualityScore: Int
     )
 
     data class NetworkInfo(
         val ssid: String,
         val bssid: String,
+        val vendor: String,
         val rssi: Int,
         val frequency: Int,
         val channel: Int,
@@ -41,7 +51,28 @@ class WifiAnalyzer(private val context: Context) {
             }
         }
 
-        return HardwareReport(is5G, is6G, currentStandard)
+        val rssi = wifiInfo.rssi
+        val linkSpeed = wifiInfo.linkSpeed
+        var pingMs = -1L
+        var securityType = "Открытая сеть"
+        var quality = 0
+
+        if (hasConnection) {
+            pingMs = measurePing("8.8.8.8")
+            quality = calculateQualityScore(rssi, linkSpeed)
+
+            val currentSsid = wifiInfo.ssid?.replace("\"", "") ?: ""
+            try {
+                val matched = wifiManager.scanResults.find { it.SSID == currentSsid }
+                if (matched != null) securityType = getSecurityString(matched.capabilities)
+            } catch (e: Exception) {}
+        }
+
+        return HardwareReport(
+            is5G, is6G, currentStandard, hasConnection,
+            wifiInfo.ssid?.replace("\"", "") ?: "",
+            freq, linkSpeed, rssi, securityType, pingMs, quality
+        )
     }
 
     fun scanEther(): List<NetworkInfo> {
@@ -56,6 +87,7 @@ class WifiAnalyzer(private val context: Context) {
                     NetworkInfo(
                         ssid = ssid,
                         bssid = scan.BSSID ?: "Неизвестно",
+                        vendor = getVendorFromMac(scan.BSSID ?: ""),
                         rssi = scan.level,
                         frequency = scan.frequency,
                         channel = calculateChannel(scan.frequency),
@@ -63,11 +95,48 @@ class WifiAnalyzer(private val context: Context) {
                     )
                 )
             }
-        } catch (e: Exception) {
-            // Игнорируем ошибки, если сканирование недоступно
-        }
+        } catch (e: Exception) {}
 
         return results.sortedByDescending { it.rssi }
+    }
+
+    // OUI Lookup - Определение вендора по MAC адресу
+    private fun getVendorFromMac(mac: String): String {
+        val cleanMac = mac.uppercase().replace(":", "")
+        if (cleanMac.length < 6) return "Неизвестно"
+
+        // Проверка на рандомизированный MAC (Local bit 1)
+        val secondChar = cleanMac[1]
+        if (secondChar == '2' || secondChar == '6' || secondChar == 'A' || secondChar == 'E') {
+            return "Случайный MAC (Hotspot/Рандом)"
+        }
+
+        val oui = cleanMac.substring(0, 6)
+        return when (oui) {
+            "CCBBFE", "001E10", "4846FB", "A4933F", "00464B" -> "Huawei"
+            "503EAA", "C0C9E3", "E894F6", "003192", "30B5C2", "68FF7B" -> "TP-Link"
+            "04BF6D", "04D4C4", "107B44", "14D64D", "1C5F2B" -> "Asus"
+            "001DD8", "048D38", "50D4F7", "C46E1F" -> "Keenetic"
+            "286C07", "34CE00", "7811DC", "8C10D4" -> "Xiaomi"
+            "001E8C", "00259E", "0030EA", "00D0D0", "C864C7" -> "D-Link"
+            "0019CB", "00223F", "002511", "081075" -> "ZTE"
+            "000C42", "4C5E0C", "D4CA6D" -> "MikroTik"
+            "0012A9", "0014D8", "0495E6" -> "Tenda"
+            "00A0F8", "082697", "480033" -> "Mercusys"
+            "107C61", "000393", "000A27" -> "Apple"
+            else -> "Неизвестный вендор"
+        }
+    }
+
+    // Расчет Quality Score от 0 до 100%
+    private fun calculateQualityScore(rssi: Int, linkSpeed: Int): Int {
+        var score = 100
+        if (rssi < -50) {
+            score -= (rssi + 50) * -2 // Потеря баллов при падении сигнала
+        }
+        if (linkSpeed in 1..99) score -= 10
+        if (linkSpeed in 1..29) score -= 10
+        return score.coerceIn(0, 100)
     }
 
     private fun calculateChannel(freq: Int): Int {
@@ -88,5 +157,13 @@ class WifiAnalyzer(private val context: Context) {
             capabilities.contains("WEP") -> "WEP"
             else -> "Открытая сеть"
         }
+    }
+
+    private fun measurePing(host: String): Long {
+        return try {
+            val startTime = System.currentTimeMillis()
+            val reachable = InetAddress.getByName(host).isReachable(1500)
+            if (reachable) System.currentTimeMillis() - startTime else -1L
+        } catch (e: Exception) { -1L }
     }
 }
