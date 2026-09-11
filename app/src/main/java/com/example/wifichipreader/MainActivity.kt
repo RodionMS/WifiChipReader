@@ -46,6 +46,7 @@ class MainActivity : AppCompatActivity() {
         initViews()
         requestPermissionsIfNeeded()
         setupTabs()
+        setupTvFocusAnimations() // Инициализация логики для пульта Android TV
 
         btnAnalyze.setOnClickListener { runHardwareScan() }
         runHardwareScan()
@@ -58,6 +59,23 @@ class MainActivity : AppCompatActivity() {
         layoutScanner = findViewById(R.id.layoutScanner)
         containerNetworks = findViewById(R.id.containerNetworks)
         btnAnalyze = findViewById(R.id.btnAnalyze)
+    }
+
+    // Анимация фокуса для пульта Android TV (Увеличение при наведении)
+    private fun setupTvFocusAnimations() {
+        val focusChangeListener = View.OnFocusChangeListener { view, hasFocus ->
+            if (hasFocus) {
+                // Кнопка в фокусе - плавно увеличиваем
+                view.animate().scaleX(1.05f).scaleY(1.05f).translationZ(10f).setDuration(150).start()
+            } else {
+                // Фокус ушел - возвращаем исходный размер
+                view.animate().scaleX(1.0f).scaleY(1.0f).translationZ(0f).setDuration(150).start()
+            }
+        }
+
+        tabHardware.onFocusChangeListener = focusChangeListener
+        tabScanner.onFocusChangeListener = focusChangeListener
+        btnAnalyze.onFocusChangeListener = focusChangeListener
     }
 
     private fun setupTabs() {
@@ -135,7 +153,6 @@ class MainActivity : AppCompatActivity() {
                     setTextColor(if (hasWifi7) colorGreen else colorGray)
                 }
 
-                // Заполнение текущего соединения
                 if (report.hasConnection) {
                     findViewById<ProgressBar>(R.id.pbQuality).progress = report.qualityScore
 
@@ -203,7 +220,6 @@ class MainActivity : AppCompatActivity() {
             }
 
             val macAndSec = TextView(this).apply {
-                // Добавили отображение вендора!
                 text = "MAC: ${net.bssid} (${net.vendor})\n\uD83D\uDD12 ${net.security}"
                 setTextColor(Color.parseColor("#AAAAAA"))
                 textSize = 13f
