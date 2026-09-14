@@ -240,6 +240,31 @@ class WifiAnalyzer(private val context: Context) {
         }
     }
 
+    // Выполнение команды от имени суперпользователя (Root)
+    private fun runRootCommand(command: String): String {
+        return try {
+            val process = Runtime.getRuntime().exec(arrayOf("su", "-c", command))
+            val reader = BufferedReader(InputStreamReader(process.inputStream))
+            val output = java.lang.StringBuilder()
+            var line: String?
+            while (reader.readLine().also { line = it } != null) {
+                output.append(line).append("\n")
+            }
+            process.waitFor()
+
+            // Если стандартный вывод пуст, читаем ошибки
+            if (output.isEmpty()) {
+                val errorReader = BufferedReader(InputStreamReader(process.errorStream))
+                while (errorReader.readLine().also { line = it } != null) {
+                    output.append(line).append("\n")
+                }
+            }
+            output.toString().trim()
+        } catch (e: Exception) {
+            "[NO ROOT]: ${e.message}"
+        }
+    }
+
     fun getRawSystemData(): String {
         val sb = StringBuilder()
 
@@ -267,12 +292,24 @@ class WifiAnalyzer(private val context: Context) {
             "/sys/class/net/wlan0/device/uevent",
             "/sys/class/net/wlan0/carrier"
         )
+
         for (path in sysfsPaths) {
             try {
                 val file = File(path)
-                if (file.exists()) sb.append("$path: ${file.readText().trim()}\n")
-                else sb.append("$path: [Permission Denied]\n")
-            } catch (e: Exception) {}
+                if (file.exists() && file.canRead()) {
+                    sb.append("$path: ${file.readText().trim()}\n")
+                } else {
+                    // Пытаемся прочитать заблокированный файл через Root
+                    val rootOutput = runRootCommand("cat $path")
+                    if (rootOutput.isNotEmpty() && !rootOutput.contains("Permission denied", ignoreCase = true) && !rootOutput.contains("not found", ignoreCase = true) && !rootOutput.contains("NO ROOT")) {
+                        sb.append("$path: [ROOT] $rootOutput\n")
+                    } else {
+                        sb.append("$path: [Permission Denied / No Root]\n")
+                    }
+                }
+            } catch (e: Exception) {
+                sb.append("$path: [Ошибка доступа]\n")
+            }
         }
         return sb.toString()
     }

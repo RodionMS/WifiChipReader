@@ -284,31 +284,56 @@ class MainActivity : AppCompatActivity() {
             }
         """.trimIndent()
 
-        try {
-            val size = 600
-            val bitMatrix = QRCodeWriter().encode(json, BarcodeFormat.QR_CODE, size, size)
-            val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.RGB_565)
-            for (x in 0 until size) {
-                for (y in 0 until size) {
-                    bitmap.setPixel(x, y, if (bitMatrix.get(x, y)) Color.BLACK else Color.WHITE)
+        // Блокируем кнопку на время генерации, чтобы не нажать дважды пультом
+        btnShowQR.isEnabled = false
+        val originalText = btnShowQR.text
+        btnShowQR.text = "..."
+
+        // ЗАПУСКАЕМ ТЯЖЕЛЫЙ КОД В ФОНОВОМ ПОТОКЕ (Защита от вылетов на Amlogic)
+        Thread {
+            try {
+                // 1. Уменьшили исходную матрицу (экономия процессора и ОЗУ)
+                val size = 350
+                val bitMatrix = QRCodeWriter().encode(json, BarcodeFormat.QR_CODE, size, size)
+
+                // 2. Самый совместимый формат пикселей для ТВ-приставок
+                val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+                for (x in 0 until size) {
+                    for (y in 0 until size) {
+                        bitmap.setPixel(x, y, if (bitMatrix.get(x, y)) Color.BLACK else Color.WHITE)
+                    }
+                }
+
+                // ВОЗВРАЩАЕМСЯ В ГЛАВНЫЙ ПОТОК ДЛЯ ОТРИСОВКИ ИНТЕРФЕЙСА
+                runOnUiThread {
+                    btnShowQR.isEnabled = true
+                    btnShowQR.text = originalText
+
+                    val imageView = ImageView(this@MainActivity)
+                    imageView.setImageBitmap(bitmap)
+                    // 3. Растягиваем средствами видеокарты, чтобы QR был крупным
+                    imageView.scaleType = ImageView.ScaleType.FIT_CENTER
+                    imageView.setPadding(32, 32, 32, 32)
+                    imageView.setBackgroundColor(Color.WHITE)
+
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle(getString(R.string.qr_title))
+                        .setMessage(getString(R.string.qr_desc))
+                        .setView(imageView)
+                        .setPositiveButton(getString(R.string.dialog_close)) { dialog, _ -> dialog.dismiss() }
+                        .show()
+                }
+
+            } catch (e: Exception) {
+                // Если сбой всё же произойдет, пишем его в нашу консоль DEBUG
+                AppLog.e("QR_CRASH", e.message ?: "Unknown error")
+                runOnUiThread {
+                    btnShowQR.isEnabled = true
+                    btnShowQR.text = originalText
+                    Toast.makeText(this@MainActivity, getString(R.string.qr_error), Toast.LENGTH_LONG).show()
                 }
             }
-
-            val imageView = ImageView(this)
-            imageView.setImageBitmap(bitmap)
-            imageView.setPadding(32, 32, 32, 32)
-            imageView.setBackgroundColor(Color.WHITE)
-
-            AlertDialog.Builder(this)
-                .setTitle(getString(R.string.qr_title))
-                .setMessage(getString(R.string.qr_desc))
-                .setView(imageView)
-                .setPositiveButton(getString(R.string.dialog_close)) { dialog, _ -> dialog.dismiss() }
-                .show()
-
-        } catch (e: Exception) {
-            Toast.makeText(this, getString(R.string.qr_error), Toast.LENGTH_SHORT).show()
-        }
+        }.start()
     }
 
     private fun setupTvFocusAnimations() {
