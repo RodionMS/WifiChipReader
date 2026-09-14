@@ -1,5 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
+	<!-- Светлая тема -->
+	<color name="bg_main">#F0F2F5</color>
+	<color name="bg_card">#FFFFFF</color>
+	<color name="text_primary">#121212</color>
+	<color name="text_secondary">#666666</color>
+	<color name="btn_inactive">#E0E0E0</color>
+	<color name="border_focus">#000000</color>
+	<!-- Черная рамка фокуса для ТВ -->
+
+	<!-- Акценты (одинаковые для обеих тем) -->
+	<color name="accent_green">#4CAF50</color>
+	<color name="accent_blue">#03A9F4</color>
+	<color name="accent_purple">#673AB7</color>
+	<color name="error_red">#F44336</color>
+	<color name="warn_yellow">#FFC107</color>
+	<color name="graph_fill">#334CAF50</color>
+	<color name="console_bg">#2B2B2B</color>
+	<color name="console_text">#00FF00</color>
 </resources>

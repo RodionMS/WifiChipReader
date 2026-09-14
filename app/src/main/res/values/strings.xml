@@ -1,3 +1,69 @@
 <resources>
-    <string name="app_name">WifiChipReader</string>
+	<string name="app_name">WiFi Hardware Pro</string>
+	<string name="tab_ttx">ТТХ</string>
+	<string name="tab_scanner">ЭФИР</string>
+	<string name="tab_debug">DEBUG</string>
+	<string name="btn_scan">Просканировать</string>
+	<string name="btn_qr">QR ТТХ</string>
+	<string name="btn_export">Экспорт отчета</string>
+	<string name="system_memory">СИСТЕМА И ПАМЯТЬ (INFO ⓘ)</string>
+	<string name="hw_capabilities">АППАРАТНЫЕ ВОЗМОЖНОСТИ (INFO ⓘ)</string>
+	<string name="wifi_standards">ПОДДЕРЖКА СТАНДАРТОВ (INFO ⓘ)</string>
+	<string name="current_connection">ТЕКУЩЕЕ СОЕДИНЕНИЕ (INFO ⓘ)</string>
+	<string name="raw_data">СЫРЫЕ СИСТЕМНЫЕ ДАННЫЕ</string>
+
+	<string name="settings">Настройки</string>
+	<string name="language">Язык</string>
+	<string name="theme">Тема оформления</string>
+	<string name="theme_dark">Тёмная</string>
+	<string name="theme_light">Светлая</string>
+	<string name="dialog_ok">Понятно</string>
+	<string name="dialog_close">Закрыть</string>
+
+	<string name="tt_sys_title">Система и Память</string>
+	<string name="tt_sys_desc">• ОЗУ (RAM): Оперативная память.\n\n• ПЗУ (ROM): Внутренний накопитель.</string>
+	<string name="tt_hw_title">Аппаратные диапазоны</string>
+	<string name="tt_hw_desc">• 5 GHz / 6 GHz: Частотные диапазоны Wi-Fi.</string>
+	<string name="tt_std_title">Стандарты связи</string>
+	<string name="tt_std_desc">Поколения сетей: от Wi-Fi 4 до Wi-Fi 7.</string>
+	<string name="tt_conn_title">Соединение</string>
+	<string name="tt_conn_desc">Живой мониторинг сигнала (RSSI).</string>
+
+	<string name="qr_title">QR-код оборудования</string>
+	<string name="qr_desc">Отсканируйте камерой смартфона.</string>
+	<string name="qr_error">Ошибка генерации QR</string>
+	<string name="qr_need_scan">Сначала просканируйте систему</string>
+
+	<string name="export_saved">Отчет сохранен:\n%1$s</string>
+	<string name="export_error">Ошибка экспорта: %1$s</string>
+
+	<string name="status_ping">Пинг...</string>
+	<string name="status_logs">Сбор логов...</string>
+	<string name="status_gps_off">ВНИМАНИЕ: Геолокация (GPS) выключена!\nВключите её для сканирования сетей.</string>
+	<string name="status_scanning">Идет сканирование (сетей пока нет)...</string>
+	<string name="auto_scan">Автообновление эфира: каждые 8 сек...</string>
+
+	<string name="quality">Качество связи: %1$d%%</string>
+	<string name="quality_wait">Качество связи: Ожидание...</string>
+	<string name="no_conn">Нет активного подключения</string>
+	<string name="info_unavail">Информация недоступна</string>
+
+	<string name="supported">Поддерживается</string>
+	<string name="not_supported">Нет</string>
+	<string name="confirmed">Подтверждено</string>
+	<string name="not_detected">Не обнаружено</string>
+	<string name="open_net">Открытая сеть</string>
+	<string name="unknown">Неизвестно</string>
+	<string name="random_mac">Случайный MAC (Hotspot)</string>
+
+	<string name="label_device">• Устройство: %1$s %2$s</string>
+	<string name="label_ram">• ОЗУ (RAM): %1$s GB</string>
+	<string name="label_rom">• ПЗУ (ROM): %1$s GB</string>
+	<string name="label_5g">• 5 GHz: %1$s</string>
+	<string name="label_6g">• 6 GHz: %1$s</string>
+	<string name="label_details">• Сеть: %1$s\n• Шифрование: %2$s\n• Частота: %3$s MHz\n• Теорет. линк: %4$s Mbps\n• Сигнал: %5$s dBm\n• Пинг: %6$s</string>
+	<string name="label_wifi_yes">✓ WiFi %1$s — %2$s</string>
+	<string name="label_wifi_no">✕ WiFi %1$s — %2$s</string>
+	<string name="label_wifi_maybe">• WiFi %1$s — %2$s</string>
+	<string name="label_freq_signal">Freq: %1$sMHz  |  CH %2$s  |  Уровень: %3$s dBm</string>
 </resources>

@@ -13,18 +13,16 @@ import java.io.InputStreamReader
 import java.net.InetAddress
 import java.text.SimpleDateFormat
 import java.util.Date
-import java.util.Locale
 
 object AppLog {
     val messages = java.lang.StringBuilder()
 
-    private fun log(level: String, tag: String, msg: String) {
-        val time = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())
-        messages.append("[$time] [$level] $tag: $msg\n")
+    fun e(tag: String, msg: String) {
+        messages.append("[ERROR] $tag: $msg\n")
     }
-
-    fun e(tag: String, msg: String) = log("ERROR", tag, msg)
-    fun i(tag: String, msg: String) = log("INFO", tag, msg)
+    fun i(tag: String, msg: String) {
+        messages.append("[INFO] $tag: $msg\n")
+    }
 }
 
 class WifiAnalyzer(private val context: Context) {
@@ -63,7 +61,6 @@ class WifiAnalyzer(private val context: Context) {
         val qualityScore: Int
     )
 
-    // НОВАЯ МОДЕЛЬ ДЛЯ ПАМЯТИ
     data class MemoryReport(
         val ramTotalGb: Double,
         val ramAvailGb: Double,
@@ -71,16 +68,13 @@ class WifiAnalyzer(private val context: Context) {
         val romAvailGb: Double
     )
 
-    // НОВАЯ ФУНКЦИЯ ДЛЯ ПОЛУЧЕНИЯ ОЗУ/ПЗУ
     fun getMemoryReport(): MemoryReport {
-        // ОЗУ (RAM)
         val actManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         val memInfo = ActivityManager.MemoryInfo()
         actManager.getMemoryInfo(memInfo)
         val ramTotal = memInfo.totalMem.toDouble() / (1024 * 1024 * 1024)
         val ramAvail = memInfo.availMem.toDouble() / (1024 * 1024 * 1024)
 
-        // ПЗУ (ROM / Внутреннее хранилище)
         val statFs = StatFs(Environment.getDataDirectory().path)
         val romTotal = statFs.totalBytes.toDouble() / (1024 * 1024 * 1024)
         val romAvail = statFs.availableBytes.toDouble() / (1024 * 1024 * 1024)
@@ -110,7 +104,7 @@ class WifiAnalyzer(private val context: Context) {
         val rssi = wifiInfo.rssi
         val linkSpeed = wifiInfo.linkSpeed
         var pingMs = -1L
-        var securityType = "Открытая сеть"
+        var securityType = context.getString(R.string.open_net)
         var quality = 0
 
         if (hasConnection) {
@@ -138,7 +132,7 @@ class WifiAnalyzer(private val context: Context) {
         val hasConnection = freq > 0 && wifiInfo.ssid != null && wifiInfo.ssid != "<unknown ssid>"
 
         var ssid = ""
-        var securityType = "Открытая сеть"
+        var securityType = context.getString(R.string.open_net)
         var quality = 0
 
         if (hasConnection) {
@@ -162,11 +156,11 @@ class WifiAnalyzer(private val context: Context) {
             wifiManager.startScan()
             val scanResults = wifiManager.scanResults
             for (scan in scanResults) {
-                val ssid = if (scan.SSID.isNullOrEmpty()) "[Скрытая сеть]" else scan.SSID
+                val ssid = if (scan.SSID.isNullOrEmpty()) "[Hidden]" else scan.SSID
                 results.add(
                     NetworkInfo(
                         ssid = ssid,
-                        bssid = scan.BSSID ?: "Неизвестно",
+                        bssid = scan.BSSID ?: "00:00:00:00:00:00",
                         vendor = getVendorFromMac(scan.BSSID ?: ""),
                         rssi = scan.level,
                         frequency = scan.frequency,
@@ -176,7 +170,7 @@ class WifiAnalyzer(private val context: Context) {
                 )
             }
         } catch (e: Exception) {
-            AppLog.e("EtherScan", "Ошибка сканирования: ${e.message}")
+            AppLog.e("EtherScan", e.message ?: "Error")
         }
 
         return results.sortedByDescending { it.rssi }
@@ -184,11 +178,11 @@ class WifiAnalyzer(private val context: Context) {
 
     private fun getVendorFromMac(mac: String): String {
         val cleanMac = mac.uppercase().replace(":", "")
-        if (cleanMac.length < 6) return "Неизвестно"
+        if (cleanMac.length < 6) return context.getString(R.string.unknown)
 
         val secondChar = cleanMac[1]
         if (secondChar == '2' || secondChar == '6' || secondChar == 'A' || secondChar == 'E') {
-            return "Случайный MAC (Hotspot)"
+            return context.getString(R.string.random_mac)
         }
 
         val oui = cleanMac.substring(0, 6)
@@ -204,7 +198,7 @@ class WifiAnalyzer(private val context: Context) {
             "0012A9", "0014D8", "0495E6" -> "Tenda"
             "00A0F8", "082697", "480033" -> "Mercusys"
             "107C61", "000393", "000A27" -> "Apple"
-            else -> "Неизвестно"
+            else -> context.getString(R.string.unknown)
         }
     }
 
@@ -232,7 +226,7 @@ class WifiAnalyzer(private val context: Context) {
             capabilities.contains("WPA2") -> "WPA2-PSK"
             capabilities.contains("WPA") -> "WPA-PSK"
             capabilities.contains("WEP") -> "WEP"
-            else -> "Открытая сеть"
+            else -> context.getString(R.string.open_net)
         }
     }
 
@@ -242,7 +236,6 @@ class WifiAnalyzer(private val context: Context) {
             val reachable = InetAddress.getByName(host).isReachable(1500)
             if (reachable) System.currentTimeMillis() - startTime else -1L
         } catch (e: Exception) {
-            AppLog.e("Ping", "Сбой пинга: ${e.message}")
             -1L
         }
     }
@@ -250,11 +243,10 @@ class WifiAnalyzer(private val context: Context) {
     fun getRawSystemData(): String {
         val sb = StringBuilder()
 
-        sb.append("=== APP LOGS (ВНУТРЕННИЕ ОШИБКИ) ===\n")
-        if (AppLog.messages.isEmpty()) sb.append("Ошибок пока нет.\n")
-        else sb.append(AppLog.messages.toString())
+        sb.append("=== APP LOGS ===\n")
+        if (AppLog.messages.isNotEmpty()) sb.append(AppLog.messages.toString())
 
-        sb.append("\n=== SYSTEM PROPERTIES (GETPROP) ===\n")
+        sb.append("\n=== SYSTEM PROPERTIES ===\n")
         try {
             val process = Runtime.getRuntime().exec("getprop")
             val reader = BufferedReader(InputStreamReader(process.inputStream))
@@ -266,11 +258,9 @@ class WifiAnalyzer(private val context: Context) {
                 }
             }
             reader.close()
-        } catch (e: Exception) {
-            sb.append("Ошибка чтения getprop: ${e.message}\n")
-        }
+        } catch (e: Exception) {}
 
-        sb.append("\n=== SYSFS WLAN0 (HW DIRECTORY) ===\n")
+        sb.append("\n=== SYSFS WLAN0 ===\n")
         val sysfsPaths = listOf(
             "/sys/class/net/wlan0/address",
             "/sys/class/net/wlan0/operstate",
@@ -281,10 +271,8 @@ class WifiAnalyzer(private val context: Context) {
             try {
                 val file = File(path)
                 if (file.exists()) sb.append("$path: ${file.readText().trim()}\n")
-                else sb.append("$path: [Нет файла / Permission Denied]\n")
-            } catch (e: Exception) {
-                sb.append("$path: [Ошибка доступа]\n")
-            }
+                else sb.append("$path: [Permission Denied]\n")
+            } catch (e: Exception) {}
         }
         return sb.toString()
     }
