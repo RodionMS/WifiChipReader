@@ -42,6 +42,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tabDebug: Button
     private lateinit var btnSettings: Button
 
+    private lateinit var btnShowHistory: Button
+    private lateinit var btnClearHistory: Button
+
     private lateinit var layoutHardware: ScrollView
     private lateinit var layoutScanner: ScrollView
     private lateinit var layoutDebug: ScrollView
@@ -68,6 +71,34 @@ class MainActivity : AppCompatActivity() {
 
     private var lastReport: WifiAnalyzer.HardwareReport? = null
     private var lastMemReport: WifiAnalyzer.MemoryReport? = null
+
+    // База данных
+    private lateinit var db: AppDatabase
+
+    // Таймер фоновой записи в БД (каждые 15 секунд)
+    private val dbLoggerHandler = Handler(Looper.getMainLooper())
+    private val dbLoggerRunnable = object : Runnable {
+        override fun run() {
+            Thread {
+                val stats = analyzer.getLiveStats()
+                if (stats.hasConnection) {
+                    // Измеряем свежий пинг прямо в фоновом потоке
+                    val freshPing = analyzer.measurePing()
+                    lastPingMs = freshPing
+
+                    val log = WifiLog(
+                        timestamp = System.currentTimeMillis(),
+                        ssid = stats.ssid,
+                        rssi = stats.rssi,
+                        linkSpeed = stats.linkSpeed,
+                        pingMs = freshPing
+                    )
+                    db.wifiLogDao().insertLog(log)
+                }
+            }.start()
+            dbLoggerHandler.postDelayed(this, 15000)
+        }
+    }
 
     private val scanHandler = Handler(Looper.getMainLooper())
     private val scanRunnable = object : Runnable {
@@ -122,7 +153,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Применяем тему до отрисовки интерфейса
         val prefs = getSharedPreferences("WifiPrefs", Context.MODE_PRIVATE)
         val themeMode = prefs.getInt("AppTheme", AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
         AppCompatDelegate.setDefaultNightMode(themeMode)
@@ -134,6 +164,7 @@ class MainActivity : AppCompatActivity() {
         AppLog.i("App", "App Started")
 
         analyzer = WifiAnalyzer(this)
+        db = AppDatabase.getDatabase(this)
 
         initViews()
         requestPermissionsIfNeeded()
@@ -141,10 +172,21 @@ class MainActivity : AppCompatActivity() {
         setupTabs()
         setupTooltips()
 
+        // Запуск логгера БД
+        dbLoggerHandler.post(dbLoggerRunnable)
+
         btnSettings.setOnClickListener { showSettingsDialog() }
         btnAnalyze.setOnClickListener { runHardwareScan() }
         btnExportReport.setOnClickListener { exportDebugReport() }
         btnShowQR.setOnClickListener { showQrDialog() }
+
+        btnShowHistory.setOnClickListener { showDatabaseHistory() }
+        btnClearHistory.setOnClickListener {
+            Thread {
+                db.wifiLogDao().clearHistory()
+                runOnUiThread { Toast.makeText(this@MainActivity, getString(R.string.db_cleared), Toast.LENGTH_SHORT).show() }
+            }.start()
+        }
 
         runHardwareScan()
     }
@@ -154,6 +196,9 @@ class MainActivity : AppCompatActivity() {
         tabScanner = findViewById(R.id.tabScanner)
         tabDebug = findViewById(R.id.tabDebug)
         btnSettings = findViewById(R.id.btnSettings)
+
+        btnShowHistory = findViewById(R.id.btnShowHistory)
+        btnClearHistory = findViewById(R.id.btnClearHistory)
 
         layoutHardware = findViewById(R.id.layoutHardware)
         layoutScanner = findViewById(R.id.layoutScanner)
@@ -177,6 +222,47 @@ class MainActivity : AppCompatActivity() {
         tvRom = findViewById(R.id.tvRom)
     }
 
+    private fun showDatabaseHistory() {
+        Thread {
+            val logs = db.wifiLogDao().getLastLogs()
+            runOnUiThread {
+                if (logs.isEmpty()) {
+                    Toast.makeText(this, getString(R.string.db_empty_wait), Toast.LENGTH_SHORT).show()
+                    return@runOnUiThread
+                }
+
+                val sb = StringBuilder()
+                val dateFormat = SimpleDateFormat("HH:mm:ss", Locale.US)
+
+                sb.append(String.format("%-10s | %-5s | %-6s | %s\n", getString(R.string.table_time), "RSSI", "PING", "SSID"))
+                sb.append("------------------------------------------\n")
+
+                for (log in logs) {
+                    val time = dateFormat.format(Date(log.timestamp))
+                    val pingStr = if (log.pingMs >= 0) "${log.pingMs}ms" else "N/A"
+                    sb.append(String.format("%-10s | %-5d | %-6s | %s\n", time, log.rssi, pingStr, log.ssid))
+                }
+
+                val textView = TextView(this).apply {
+                    text = sb.toString()
+                    textSize = 12f
+                    setPadding(32, 32, 32, 32)
+                    setTextColor(ContextCompat.getColor(this@MainActivity, R.color.accent_green))
+                    setBackgroundColor(ContextCompat.getColor(this@MainActivity, R.color.bg_card))
+                    typeface = android.graphics.Typeface.MONOSPACE
+                }
+
+                val scroll = ScrollView(this).apply { addView(textView) }
+
+                AlertDialog.Builder(this)
+                    .setTitle(getString(R.string.btn_show_history))
+                    .setView(scroll)
+                    .setPositiveButton(getString(R.string.dialog_close)) { dialog, _ -> dialog.dismiss() }
+                    .show()
+            }
+        }.start()
+    }
+
     private fun showSettingsDialog() {
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -185,7 +271,6 @@ class MainActivity : AppCompatActivity() {
 
         var dialog: AlertDialog? = null
 
-        // Блок языка
         val tvLang = TextView(this).apply {
             text = getString(R.string.language)
             textSize = 18f
@@ -203,7 +288,6 @@ class MainActivity : AppCompatActivity() {
         langGroup.addView(btnZh)
         layout.addView(langGroup)
 
-        // Блок темы
         val tvTheme = TextView(this).apply {
             text = getString(R.string.theme)
             textSize = 18f
@@ -284,19 +368,14 @@ class MainActivity : AppCompatActivity() {
             }
         """.trimIndent()
 
-        // Блокируем кнопку на время генерации, чтобы не нажать дважды пультом
         btnShowQR.isEnabled = false
         val originalText = btnShowQR.text
         btnShowQR.text = "..."
 
-        // ЗАПУСКАЕМ ТЯЖЕЛЫЙ КОД В ФОНОВОМ ПОТОКЕ (Защита от вылетов на Amlogic)
         Thread {
             try {
-                // 1. Уменьшили исходную матрицу (экономия процессора и ОЗУ)
                 val size = 350
                 val bitMatrix = QRCodeWriter().encode(json, BarcodeFormat.QR_CODE, size, size)
-
-                // 2. Самый совместимый формат пикселей для ТВ-приставок
                 val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
                 for (x in 0 until size) {
                     for (y in 0 until size) {
@@ -304,14 +383,12 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
 
-                // ВОЗВРАЩАЕМСЯ В ГЛАВНЫЙ ПОТОК ДЛЯ ОТРИСОВКИ ИНТЕРФЕЙСА
                 runOnUiThread {
                     btnShowQR.isEnabled = true
                     btnShowQR.text = originalText
 
                     val imageView = ImageView(this@MainActivity)
                     imageView.setImageBitmap(bitmap)
-                    // 3. Растягиваем средствами видеокарты, чтобы QR был крупным
                     imageView.scaleType = ImageView.ScaleType.FIT_CENTER
                     imageView.setPadding(32, 32, 32, 32)
                     imageView.setBackgroundColor(Color.WHITE)
@@ -325,7 +402,6 @@ class MainActivity : AppCompatActivity() {
                 }
 
             } catch (e: Exception) {
-                // Если сбой всё же произойдет, пишем его в нашу консоль DEBUG
                 AppLog.e("QR_CRASH", e.message ?: "Unknown error")
                 runOnUiThread {
                     btnShowQR.isEnabled = true
@@ -370,6 +446,8 @@ class MainActivity : AppCompatActivity() {
         btnShowQR.onFocusChangeListener = buttonFocusListener
         btnExportReport.onFocusChangeListener = buttonFocusListener
         btnSettings.onFocusChangeListener = buttonFocusListener
+        btnShowHistory.onFocusChangeListener = buttonFocusListener
+        btnClearHistory.onFocusChangeListener = buttonFocusListener
 
         blockSystem.onFocusChangeListener = blockFocusListener
         blockHardware.onFocusChangeListener = blockFocusListener
@@ -592,6 +670,11 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Toast.makeText(this, getString(R.string.export_error, e.message), Toast.LENGTH_SHORT).show()
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        dbLoggerHandler.removeCallbacks(dbLoggerRunnable)
     }
 
     override fun onPause() {

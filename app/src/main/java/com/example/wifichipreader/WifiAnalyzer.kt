@@ -230,7 +230,7 @@ class WifiAnalyzer(private val context: Context) {
         }
     }
 
-    private fun measurePing(host: String): Long {
+    fun measurePing(host: String = "8.8.8.8"): Long {
         return try {
             val startTime = System.currentTimeMillis()
             val reachable = InetAddress.getByName(host).isReachable(1500)

@@ -66,4 +66,10 @@
 	<string name="label_wifi_no">✕ WiFi %1$s — %2$s</string>
 	<string name="label_wifi_maybe">• WiFi %1$s — %2$s</string>
 	<string name="label_freq_signal">Freq: %1$sMHz  |  CH %2$s  |  Уровень: %3$s dBm</string>
+	
+	<string name="btn_show_history">История БД (SQLite)</string>
+	<string name="btn_clear_history">Очистить БД</string>
+	<string name="db_empty_wait">База пуста. Подождите 15 сек.</string>
+	<string name="db_cleared">База данных очищена</string>
+	<string name="table_time">ВРЕМЯ</string>
 </resources>

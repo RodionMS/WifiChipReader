@@ -259,6 +259,38 @@
                 android:orientation="vertical"
                 android:clipChildren="false">
 
+                <!-- ОБНОВЛЕННЫЙ БЛОК: Кнопки Базы Данных с темами и языками -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="16dp"
+                    android:clipChildren="false">
+
+                    <Button
+                        android:id="@+id/btnShowHistory"
+                        android:layout_width="0dp"
+                        android:layout_weight="2"
+                        android:layout_height="60dp"
+                        android:text="@string/btn_show_history"
+                        android:textColor="#FFFFFF"
+                        android:backgroundTint="@color/accent_green"
+                        android:focusable="true"
+                        android:stateListAnimator="@null"
+                        android:layout_marginEnd="8dp" />
+
+                    <Button
+                        android:id="@+id/btnClearHistory"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="60dp"
+                        android:text="@string/btn_clear_history"
+                        android:textColor="#FFFFFF"
+                        android:backgroundTint="@color/error_red"
+                        android:focusable="true"
+                        android:stateListAnimator="@null" />
+                </LinearLayout>
+
                 <Button
                     android:id="@+id/btnExportReport"
                     android:layout_width="match_parent"
