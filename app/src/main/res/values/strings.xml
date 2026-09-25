@@ -36,6 +36,11 @@
 
 	<string name="export_saved">Отчет сохранен:\n%1$s</string>
 	<string name="export_error">Ошибка экспорта: %1$s</string>
+	<string name="export_success_path">Успешно сохранено: %1$s</string>
+	<string name="export_auto_usb">Авто (Документы/USB)</string>
+	<string name="export_manual_picker">Выбрать папку вручную (SAF)</string>
+	<string name="export_picker_err">Ошибка выбора папки, сохраняем автоматически</string>
+	<string name="export_saved_auto">Отчет сохранен в Документы:\n%1$s</string>
 
 	<string name="status_ping">Пинг...</string>
 	<string name="status_logs">Сбор логов...</string>
@@ -72,4 +77,9 @@
 	<string name="db_empty_wait">База пуста. Подождите 15 сек.</string>
 	<string name="db_cleared">База данных очищена</string>
 	<string name="table_time">ВРЕМЯ</string>
+	<string name="fw_platform">Платформа чипа</string>
+	<string name="fw_build">Сборка прошивки</string>
+	<string name="ota_disabled">Отключено производителем (блокировка обновлений)</string>
+	<string name="ota_enabled">Включено (возможны прилеты обновлений)</string>
+	<string name="ota_default">По умолчанию</string>
 </resources>

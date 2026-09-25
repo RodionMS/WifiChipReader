@@ -157,7 +157,8 @@
                     android:clickable="true">
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/hw_capabilities" android:textColor="@color/text_secondary" android:textSize="12sp" android:textStyle="bold" android:layout_marginBottom="10dp" />
                     <TextView android:id="@+id/tvBand5G" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/text_primary" android:layout_marginBottom="6dp" />
-                    <TextView android:id="@+id/tvBand6G" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/text_primary" />
+                    <TextView android:id="@+id/tvBand6G" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/text_primary" android:layout_marginBottom="6dp" />
+                    <TextView android:id="@+id/tvBluetooth" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/text_primary" />
                 </LinearLayout>
 
                 <LinearLayout
@@ -227,22 +228,52 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
 
-                <TextView
-                    android:id="@+id/tvAutoScanIndicator"
+                <!-- НОВЫЙ БЛОК: Переключатель подвкладок внутри Радара -->
+                <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/auto_scan"
-                    android:textColor="@color/accent_blue"
-                    android:textSize="14sp"
-                    android:textStyle="italic"
-                    android:gravity="center"
-                    android:layout_marginBottom="16dp"/>
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="16dp">
+
+                    <Button
+                        android:id="@+id/btnSubWifi"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Wi-Fi"
+                        android:backgroundTint="@color/accent_blue"
+                        android:textColor="#000000"
+                        android:textStyle="bold"
+                        android:focusable="true"
+                        android:stateListAnimator="@null"
+                        android:layout_marginEnd="4dp" />
+
+                    <Button
+                        android:id="@+id/btnSubBt"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Bluetooth"
+                        android:backgroundTint="@color/btn_inactive"
+                        android:textColor="@color/text_primary"
+                        android:textStyle="bold"
+                        android:focusable="true"
+                        android:stateListAnimator="@null" />
+                </LinearLayout>
 
                 <LinearLayout
-                    android:id="@+id/containerNetworks"
+                    android:id="@+id/containerWifi"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"/>
+
+                <LinearLayout
+                    android:id="@+id/containerBt"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone"/>
+
             </LinearLayout>
         </ScrollView>
 
